@@ -246,7 +246,6 @@ def analyze_financial_report(
     )
 
     context = ""
-
     selected_page_numbers = []
 
     for result in relevant_pages:
@@ -315,6 +314,10 @@ uploaded_file = st.file_uploader(
 )
 
 
+# --------------------------------------------------
+# Before report upload
+# --------------------------------------------------
+
 if uploaded_file is None:
 
     st.info(
@@ -361,6 +364,10 @@ if uploaded_file is None:
             unsafe_allow_html=True,
         )
 
+
+# --------------------------------------------------
+# After report upload
+# --------------------------------------------------
 
 else:
 
@@ -426,13 +433,13 @@ else:
     )
 
     row1_col1, row1_col2, row1_col3 = st.columns(3)
-
     row2_col1, row2_col2 = st.columns(2)
 
     analysis_name = None
     analysis_question = None
 
 
+    # Financial Snapshot
     with row1_col1:
 
         if st.button(
@@ -465,6 +472,7 @@ Highlight the most important year-over-year changes.
 """
 
 
+    # Revenue Analysis
     with row1_col2:
 
         if st.button(
@@ -492,6 +500,7 @@ Finish with a short finance interpretation.
 """
 
 
+    # Profitability Analysis
     with row1_col3:
 
         if st.button(
@@ -519,6 +528,7 @@ Explain the major reasons profitability changed.
 """
 
 
+    # Cash Flow Analysis
     with row2_col1:
 
         if st.button(
@@ -546,6 +556,7 @@ Explain what the cash flow profile suggests.
 """
 
 
+    # Risk Analysis
     with row2_col2:
 
         if st.button(
@@ -599,7 +610,6 @@ based on the report.
         if custom_question.strip():
 
             analysis_name = "Custom Financial Analysis"
-
             analysis_question = custom_question
 
         else:
@@ -658,9 +668,9 @@ based on the report.
             )
 
 
-            # ----------------------------------------------
-            # Retrieval chart
-            # ----------------------------------------------
+            # --------------------------------------------------
+            # Semantic retrieval chart
+            # --------------------------------------------------
 
             st.markdown(
                 "### 🔎 Semantic Retrieval Confidence"
@@ -686,9 +696,9 @@ based on the report.
             )
 
 
-            # ----------------------------------------------
-            # Download answer
-            # ----------------------------------------------
+            # --------------------------------------------------
+            # Download analysis
+            # --------------------------------------------------
 
             st.download_button(
                 label="⬇️ Download Analysis",
@@ -702,9 +712,9 @@ based on the report.
             )
 
 
-            # ----------------------------------------------
+            # --------------------------------------------------
             # Retrieval details
-            # ----------------------------------------------
+            # --------------------------------------------------
 
             with st.expander(
                 "View retrieval details"
@@ -753,3 +763,42 @@ based on the report.
             preview_text,
             height=400,
         )
+
+
+# --------------------------------------------------
+# Project Highlights
+# --------------------------------------------------
+
+st.divider()
+
+st.markdown("### 🚀 Project Highlights")
+
+highlight1, highlight2, highlight3 = st.columns(3)
+
+with highlight1:
+    st.metric(
+        "Architecture",
+        "RAG"
+    )
+
+with highlight2:
+    st.metric(
+        "Retrieval",
+        "Semantic Search"
+    )
+
+with highlight3:
+    st.metric(
+        "Deployment",
+        "Streamlit Cloud"
+    )
+
+st.caption(
+    "Built with Python, OpenAI, vector embeddings, semantic search, "
+    "financial analysis, GitHub, and Streamlit."
+)
+
+st.caption(
+    "For educational and research purposes only. "
+    "AI-generated analysis should not be considered investment advice."
+)
