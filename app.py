@@ -1,15 +1,16 @@
+import io
 import os
-import re
 
+import numpy as np
 import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
 from pypdf import PdfReader
 
 
-# -----------------------------
-# Load OpenAI API key
-# -----------------------------
+# --------------------------------------------------
+# Load API key
+# --------------------------------------------------
 
 load_dotenv()
 
@@ -22,9 +23,9 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 
-# -----------------------------
-# Page setup
-# -----------------------------
+# --------------------------------------------------
+# Streamlit page setup
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="AI Financial Report Analyzer",
@@ -40,9 +41,121 @@ st.write(
 )
 
 
-# -----------------------------
-# Upload PDF
-# -----------------------------
+# --------------------------------------------------
+# Extract PDF text
+# --------------------------------------------------
+
+@st.cache_data(show_spinner=False)
+def extract_pdf_pages(file_bytes):
+
+    reader = PdfReader(io.BytesIO(file_bytes))
+
+    pages = []
+
+    for page_number, page in enumerate(reader.pages, start=1):
+
+        text = page.extract_text()
+
+        if text is None:
+            text = ""
+
+        pages.append(
+            {
+                "page_number": page_number,
+                "text": text
+            }
+        )
+
+    return pages
+
+
+# --------------------------------------------------
+# Create semantic embeddings for report pages
+# --------------------------------------------------
+
+@st.cache_data(show_spinner=False)
+def create_page_embeddings(page_texts):
+
+    cleaned_texts = []
+
+    for text in page_texts:
+
+        if text.strip():
+            # Keep embedding input reasonably sized
+            cleaned_texts.append(text[:12000])
+
+        else:
+            cleaned_texts.append("Blank page")
+
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=cleaned_texts
+    )
+
+    embeddings = [
+        item.embedding
+        for item in response.data
+    ]
+
+    return embeddings
+
+
+# --------------------------------------------------
+# Find most relevant pages using cosine similarity
+# --------------------------------------------------
+
+def find_relevant_pages(question, pages, page_embeddings, top_k=6):
+
+    question_response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=question
+    )
+
+    question_embedding = np.array(
+        question_response.data[0].embedding,
+        dtype=np.float32
+    )
+
+    document_embeddings = np.array(
+        page_embeddings,
+        dtype=np.float32
+    )
+
+    question_norm = np.linalg.norm(question_embedding)
+
+    document_norms = np.linalg.norm(
+        document_embeddings,
+        axis=1
+    )
+
+    similarities = (
+        document_embeddings @ question_embedding
+    ) / (
+        document_norms * question_norm + 1e-10
+    )
+
+    best_indexes = np.argsort(
+        similarities
+    )[::-1][:top_k]
+
+    results = []
+
+    for index in best_indexes:
+
+        results.append(
+            {
+                "page_number": pages[index]["page_number"],
+                "text": pages[index]["text"],
+                "similarity": float(similarities[index])
+            }
+        )
+
+    return results
+
+
+# --------------------------------------------------
+# File upload
+# --------------------------------------------------
 
 uploaded_file = st.file_uploader(
     "Upload a Financial Report",
@@ -52,32 +165,18 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    reader = PdfReader(uploaded_file)
+    file_bytes = uploaded_file.getvalue()
+
+    pages = extract_pdf_pages(file_bytes)
 
     st.success("PDF uploaded successfully!")
 
-    st.write(f"Number of pages: {len(reader.pages)}")
-
-    page_texts = []
+    st.write(f"Number of pages: {len(pages)}")
 
 
-    # -----------------------------
-    # Extract text page by page
-    # -----------------------------
-
-    for page in reader.pages:
-
-        text = page.extract_text()
-
-        if text:
-            page_texts.append(text)
-        else:
-            page_texts.append("")
-
-
-    # -----------------------------
-    # Question box
-    # -----------------------------
+    # --------------------------------------------------
+    # Question section
+    # --------------------------------------------------
 
     st.subheader("Ask the AI about this financial report")
 
@@ -94,117 +193,104 @@ if uploaded_file is not None:
 
         else:
 
-            # -----------------------------
-            # Find relevant pages
-            # -----------------------------
+            try:
 
-            stop_words = {
-                "the", "a", "an", "and", "or", "of", "to",
-                "in", "on", "for", "with", "what", "were",
-                "was", "is", "are", "how", "did", "they",
-                "their", "compared", "about"
-            }
+                # ------------------------------------------
+                # Step 1: Create semantic index
+                # ------------------------------------------
 
-            question_words = re.findall(
-                r"[a-zA-Z0-9]+",
-                question.lower()
-            )
+                with st.spinner(
+                    "Building semantic search index..."
+                ):
 
-            keywords = [
-                word for word in question_words
-                if word not in stop_words and len(word) > 1
-            ]
+                    page_texts = [
+                        page["text"]
+                        for page in pages
+                    ]
 
-
-            def score_page(text):
-
-                text_lower = text.lower()
-
-                score = 0
-
-                for keyword in keywords:
-                    score += text_lower.count(keyword)
-
-                # Give extra weight to important finance phrases
-                finance_phrases = [
-                    "net sales",
-                    "net income",
-                    "revenue",
-                    "operating income",
-                    "cash flow",
-                    "total assets",
-                    "gross margin",
-                    "earnings per share"
-                ]
-
-                for phrase in finance_phrases:
-
-                    if phrase in question.lower() and phrase in text_lower:
-                        score += 20
-
-                return score
-
-
-            ranked_pages = sorted(
-                enumerate(page_texts, start=1),
-                key=lambda item: score_page(item[1]),
-                reverse=True
-            )
-
-
-            # Send only the 8 most relevant pages
-            selected_pages = ranked_pages[:8]
-
-            context = ""
-
-            page_numbers = []
-
-            for page_number, page_text in selected_pages:
-
-                if page_text.strip():
-
-                    page_numbers.append(page_number)
-
-                    context += (
-                        f"\n\n--- PAGE {page_number} ---\n\n"
-                        f"{page_text}"
+                    page_embeddings = create_page_embeddings(
+                        page_texts
                     )
 
 
-            # -----------------------------
-            # Ask OpenAI
-            # -----------------------------
+                # ------------------------------------------
+                # Step 2: Retrieve relevant pages
+                # ------------------------------------------
 
-            with st.spinner(
-                "Finding relevant pages and analyzing the report..."
-            ):
+                with st.spinner(
+                    "Finding the most relevant pages..."
+                ):
 
-                prompt = f"""
+                    relevant_pages = find_relevant_pages(
+                        question,
+                        pages,
+                        page_embeddings,
+                        top_k=6
+                    )
+
+
+                # ------------------------------------------
+                # Step 3: Build AI context
+                # ------------------------------------------
+
+                context = ""
+
+                selected_page_numbers = []
+
+                for result in relevant_pages:
+
+                    page_number = result["page_number"]
+
+                    selected_page_numbers.append(
+                        page_number
+                    )
+
+                    context += (
+                        f"\n\n--- PDF PAGE {page_number} ---\n\n"
+                        f"{result['text']}"
+                    )
+
+
+                # ------------------------------------------
+                # Step 4: Ask AI
+                # ------------------------------------------
+
+                with st.spinner(
+                    "Analyzing the financial report..."
+                ):
+
+                    prompt = f"""
 You are a professional financial research analyst.
 
-Answer the user's question using ONLY the excerpts from the
-financial report provided below.
+The user has uploaded a company's annual report or 10-K.
 
-RULES:
+Answer the user's question using ONLY the financial report
+excerpts provided below.
+
+IMPORTANT RULES:
 
 1. Do not invent financial information.
-2. If the answer is not supported by the excerpts, clearly say so.
-3. Include the important financial numbers.
-4. Compare periods when appropriate.
-5. Explain what the numbers mean in clear language.
+2. If the report excerpts do not contain enough information,
+   clearly say that.
+3. Include important financial numbers when relevant.
+4. Compare financial periods when appropriate.
+5. Explain the answer clearly for someone studying finance.
 6. Cite the PDF page number supporting important claims.
-7. Keep the answer focused on the user's question.
+7. Distinguish between millions, billions, percentages,
+   and per-share amounts carefully.
+8. If useful, explain what the result may indicate about
+   the company's financial performance.
+9. Keep the answer focused on the question.
 
 USER QUESTION:
 
 {question}
 
-RELEVANT FINANCIAL REPORT PAGES:
+
+RELEVANT FINANCIAL REPORT EXCERPTS:
 
 {context}
 """
-
-                try:
 
                     response = client.responses.create(
                         model="gpt-5.6-luna",
@@ -212,39 +298,63 @@ RELEVANT FINANCIAL REPORT PAGES:
                         max_output_tokens=1500
                     )
 
-                    st.subheader("AI Analysis")
 
-                    st.write(response.output_text)
+                # ------------------------------------------
+                # Display answer
+                # ------------------------------------------
 
-                    st.caption(
-                        "Pages searched by the AI: "
-                        + ", ".join(map(str, page_numbers))
+                st.subheader("AI Analysis")
+
+                st.write(response.output_text)
+
+                st.caption(
+                    "Semantically retrieved PDF pages: "
+                    + ", ".join(
+                        map(str, selected_page_numbers)
                     )
-
-                except Exception as error:
-
-                    st.error(
-                        "Something went wrong while contacting the AI."
-                    )
-
-                    st.write(error)
+                )
 
 
-    # -----------------------------
-    # Optional document preview
-    # -----------------------------
+                # ------------------------------------------
+                # Show retrieval details
+                # ------------------------------------------
+
+                with st.expander(
+                    "View semantic retrieval details"
+                ):
+
+                    for result in relevant_pages:
+
+                        st.write(
+                            f"Page {result['page_number']} "
+                            f"— Similarity score: "
+                            f"{result['similarity']:.3f}"
+                        )
+
+
+            except Exception as error:
+
+                st.error(
+                    "Something went wrong while analyzing the report."
+                )
+
+                st.write(error)
+
+
+    # --------------------------------------------------
+    # Document preview
+    # --------------------------------------------------
 
     with st.expander("View extracted report text"):
 
         preview_text = ""
 
-        for page_number, text in enumerate(
-            page_texts[:5],
-            start=1
-        ):
+        for page in pages[:5]:
 
             preview_text += (
-                f"\n\n--- PAGE {page_number} ---\n\n{text}"
+                f"\n\n--- PDF PAGE "
+                f"{page['page_number']} ---\n\n"
+                f"{page['text']}"
             )
 
         st.text_area(
