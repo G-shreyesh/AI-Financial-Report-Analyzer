@@ -24,7 +24,7 @@ client = OpenAI(api_key=api_key)
 
 
 # --------------------------------------------------
-# Streamlit page setup
+# Page configuration
 # --------------------------------------------------
 
 st.set_page_config(
@@ -36,13 +36,13 @@ st.set_page_config(
 st.title("📊 AI Financial Report Analyzer")
 
 st.write(
-    "Upload a company's annual report or 10-K and ask questions "
-    "about its financial performance."
+    "Upload a company's annual report or 10-K and perform "
+    "AI-powered financial analysis using semantic search."
 )
 
 
 # --------------------------------------------------
-# Extract PDF text
+# Extract PDF pages
 # --------------------------------------------------
 
 @st.cache_data(show_spinner=False)
@@ -70,7 +70,7 @@ def extract_pdf_pages(file_bytes):
 
 
 # --------------------------------------------------
-# Create semantic embeddings for report pages
+# Create page embeddings
 # --------------------------------------------------
 
 @st.cache_data(show_spinner=False)
@@ -81,9 +81,7 @@ def create_page_embeddings(page_texts):
     for text in page_texts:
 
         if text.strip():
-            # Keep embedding input reasonably sized
             cleaned_texts.append(text[:12000])
-
         else:
             cleaned_texts.append("Blank page")
 
@@ -92,19 +90,22 @@ def create_page_embeddings(page_texts):
         input=cleaned_texts
     )
 
-    embeddings = [
+    return [
         item.embedding
         for item in response.data
     ]
 
-    return embeddings
-
 
 # --------------------------------------------------
-# Find most relevant pages using cosine similarity
+# Semantic retrieval
 # --------------------------------------------------
 
-def find_relevant_pages(question, pages, page_embeddings, top_k=6):
+def find_relevant_pages(
+    question,
+    pages,
+    page_embeddings,
+    top_k=10
+):
 
     question_response = client.embeddings.create(
         model="text-embedding-3-small",
@@ -121,7 +122,9 @@ def find_relevant_pages(question, pages, page_embeddings, top_k=6):
         dtype=np.float32
     )
 
-    question_norm = np.linalg.norm(question_embedding)
+    question_norm = np.linalg.norm(
+        question_embedding
+    )
 
     document_norms = np.linalg.norm(
         document_embeddings,
@@ -154,7 +157,111 @@ def find_relevant_pages(question, pages, page_embeddings, top_k=6):
 
 
 # --------------------------------------------------
-# File upload
+# Analyze retrieved pages
+# --------------------------------------------------
+
+def analyze_financial_report(
+    question,
+    analysis_name,
+    pages,
+    page_embeddings
+):
+
+    relevant_pages = find_relevant_pages(
+        question,
+        pages,
+        page_embeddings,
+        top_k=10
+    )
+
+    context = ""
+
+    selected_page_numbers = []
+
+    for result in relevant_pages:
+
+        page_number = result["page_number"]
+
+        selected_page_numbers.append(page_number)
+
+        context += (
+            f"\n\n--- PDF PAGE {page_number} ---\n\n"
+            f"{result['text']}"
+        )
+
+    prompt = f"""
+You are a professional equity research and financial analysis assistant.
+
+You are analyzing excerpts retrieved from a company's annual
+report or Form 10-K.
+
+ANALYSIS TYPE:
+{analysis_name}
+
+USER REQUEST:
+{question}
+
+Use ONLY the report excerpts supplied below.
+
+FINANCIAL ANALYSIS RULES:
+
+1. Never invent or estimate a number that is not supported
+   by the supplied report excerpts.
+
+2. Clearly distinguish between:
+   - millions
+   - billions
+   - percentages
+   - per-share amounts
+
+3. Always include a space between a financial number and its unit.
+   Example: $416.2 billion, not $416.2billion.
+
+4. Compare the latest year with prior years whenever the
+   necessary information is available.
+
+5. Calculate percentage changes only when the underlying
+   values are available.
+
+6. Explain significant increases or decreases.
+
+7. Identify important business drivers mentioned in the report.
+
+8. Cite important claims using:
+   (PDF p. X)
+
+9. If information cannot be found in the retrieved excerpts,
+   explicitly say that the information was not available.
+
+10. Provide interpretation from a finance perspective, but do
+    not provide investment advice.
+
+11. Keep the response structured and easy to read.
+
+12. Use clean Markdown headings and bullet points.
+
+13. Do not produce broken Markdown formatting.
+
+REPORT EXCERPTS:
+
+{context}
+"""
+
+    response = client.responses.create(
+        model="gpt-5.6-luna",
+        input=prompt,
+        max_output_tokens=1800
+    )
+
+    return (
+        response.output_text,
+        relevant_pages,
+        selected_page_numbers
+    )
+
+
+# --------------------------------------------------
+# Upload report
 # --------------------------------------------------
 
 uploaded_file = st.file_uploader(
@@ -167,185 +274,337 @@ if uploaded_file is not None:
 
     file_bytes = uploaded_file.getvalue()
 
-    pages = extract_pdf_pages(file_bytes)
-
-    st.success("PDF uploaded successfully!")
-
-    st.write(f"Number of pages: {len(pages)}")
-
-
-    # --------------------------------------------------
-    # Question section
-    # --------------------------------------------------
-
-    st.subheader("Ask the AI about this financial report")
-
-    question = st.text_input(
-        "Enter your question:"
+    pages = extract_pdf_pages(
+        file_bytes
     )
 
+    st.success(
+        "Financial report uploaded successfully!"
+    )
 
-    if st.button("Analyze Report"):
+    col1, col2 = st.columns(2)
 
-        if not question:
+    with col1:
+        st.metric(
+            "Pages in Report",
+            len(pages)
+        )
 
-            st.warning("Please enter a question first.")
+    with col2:
+        st.metric(
+            "Analysis Engine",
+            "Semantic RAG"
+        )
+
+
+    # --------------------------------------------------
+    # Create semantic index
+    # --------------------------------------------------
+
+    page_texts = [
+        page["text"]
+        for page in pages
+    ]
+
+    with st.spinner(
+        "Preparing financial report for semantic search..."
+    ):
+
+        page_embeddings = create_page_embeddings(
+            page_texts
+        )
+
+
+    st.divider()
+
+
+    # --------------------------------------------------
+    # Quick finance analysis
+    # --------------------------------------------------
+
+    st.subheader("⚡ Quick Financial Analysis")
+
+    st.write(
+        "Choose an analysis below or ask your own question."
+    )
+
+    button1, button2, button3 = st.columns(3)
+
+    button4, button5 = st.columns(2)
+
+
+    analysis_question = None
+    analysis_name = None
+
+
+    with button1:
+
+        if st.button(
+            "📌 Financial Snapshot",
+            use_container_width=True
+        ):
+
+            analysis_name = "Financial Snapshot"
+
+            analysis_question = """
+Provide a financial snapshot of the company.
+
+Find the company's consolidated financial statements,
+including the income statement, balance sheet, and cash flow
+statement.
+
+Identify the most recent available figures for:
+
+- Revenue or net sales
+- Net income
+- Operating income
+- Earnings per share
+- Operating cash flow
+- Cash and cash equivalents
+- Total assets
+- Total liabilities
+
+Compare each figure with the prior year where possible.
+
+Pay special attention to pages containing:
+- Consolidated Statements of Operations
+- Consolidated Balance Sheets
+- Consolidated Statements of Cash Flows
+
+Highlight the most important year-over-year changes and explain
+what they suggest about the company's financial performance.
+"""
+
+
+    with button2:
+
+        if st.button(
+            "💰 Revenue Analysis",
+            use_container_width=True
+        ):
+
+            analysis_name = "Revenue Analysis"
+
+            analysis_question = """
+Analyze the company's revenue or net sales performance.
+
+Include:
+
+- Current-year revenue
+- Prior-year revenue
+- Dollar change
+- Percentage change
+- Major products, services, or segments driving revenue
+- Geographic trends if available
+- Management explanations for major changes
+
+Conclude with a brief interpretation of the revenue trend.
+"""
+
+
+    with button3:
+
+        if st.button(
+            "📈 Profitability Analysis",
+            use_container_width=True
+        ):
+
+            analysis_name = "Profitability Analysis"
+
+            analysis_question = """
+Analyze the company's profitability.
+
+Look for:
+
+- Gross profit or gross margin
+- Operating income
+- Operating margin
+- Net income
+- Net margin
+- Earnings per share
+
+Compare the latest year with the prior year where possible.
+
+Explain the major drivers of profitability changes.
+"""
+
+
+    with button4:
+
+        if st.button(
+            "💵 Cash Flow Analysis",
+            use_container_width=True
+        ):
+
+            analysis_name = "Cash Flow Analysis"
+
+            analysis_question = """
+Analyze the company's cash flow position.
+
+Focus on:
+
+- Cash flow from operating activities
+- Capital expenditures
+- Investing activities
+- Financing activities
+- Share repurchases
+- Dividends
+- Cash balance
+
+If enough information exists, discuss approximate free cash
+flow using operating cash flow minus capital expenditures.
+
+Explain what the cash flow profile suggests about the company.
+"""
+
+
+    with button5:
+
+        if st.button(
+            "⚠️ Risk Analysis",
+            use_container_width=True
+        ):
+
+            analysis_name = "Risk Analysis"
+
+            analysis_question = """
+Identify and analyze the most important risks disclosed in
+the company's annual report.
+
+Group risks into useful categories such as:
+
+- Business risk
+- Financial risk
+- Market risk
+- Regulatory risk
+- Supply-chain risk
+- Geographic risk
+- Technology risk
+- Competitive risk
+
+Explain which risks appear most significant based on the report.
+"""
+
+
+    # --------------------------------------------------
+    # Custom question
+    # --------------------------------------------------
+
+    st.divider()
+
+    st.subheader("💬 Ask Your Own Question")
+
+    custom_question = st.text_input(
+        "Enter a financial question about the report:"
+    )
+
+    if st.button(
+        "Analyze Custom Question"
+    ):
+
+        if custom_question.strip():
+
+            analysis_name = "Custom Financial Analysis"
+
+            analysis_question = custom_question
 
         else:
 
-            try:
+            st.warning(
+                "Please enter a question first."
+            )
 
-                # ------------------------------------------
-                # Step 1: Create semantic index
-                # ------------------------------------------
 
-                with st.spinner(
-                    "Building semantic search index..."
-                ):
+    # --------------------------------------------------
+    # Run selected analysis
+    # --------------------------------------------------
 
-                    page_texts = [
-                        page["text"]
-                        for page in pages
-                    ]
+    if analysis_question:
 
-                    page_embeddings = create_page_embeddings(
-                        page_texts
+        try:
+
+            with st.spinner(
+                "Retrieving relevant sections and performing "
+                "financial analysis..."
+            ):
+
+                (
+                    answer,
+                    relevant_pages,
+                    selected_page_numbers
+                ) = analyze_financial_report(
+                    analysis_question,
+                    analysis_name,
+                    pages,
+                    page_embeddings
+                )
+
+
+            st.divider()
+
+            st.subheader(
+                f"📊 {analysis_name}"
+            )
+
+            # Escape dollar signs so Streamlit does not
+            # interpret financial values as LaTeX math.
+            clean_answer = answer.replace("$", r"\$")
+
+            st.markdown(
+                clean_answer
+            )
+
+
+            st.caption(
+                "Semantically retrieved PDF pages: "
+                + ", ".join(
+                    map(
+                        str,
+                        selected_page_numbers
                     )
+                )
+            )
 
 
-                # ------------------------------------------
-                # Step 2: Retrieve relevant pages
-                # ------------------------------------------
+            # --------------------------------------------------
+            # Retrieval details
+            # --------------------------------------------------
 
-                with st.spinner(
-                    "Finding the most relevant pages..."
-                ):
-
-                    relevant_pages = find_relevant_pages(
-                        question,
-                        pages,
-                        page_embeddings,
-                        top_k=6
-                    )
-
-
-                # ------------------------------------------
-                # Step 3: Build AI context
-                # ------------------------------------------
-
-                context = ""
-
-                selected_page_numbers = []
+            with st.expander(
+                "🔍 View semantic retrieval details"
+            ):
 
                 for result in relevant_pages:
 
-                    page_number = result["page_number"]
-
-                    selected_page_numbers.append(
-                        page_number
-                    )
-
-                    context += (
-                        f"\n\n--- PDF PAGE {page_number} ---\n\n"
-                        f"{result['text']}"
+                    st.write(
+                        f"PDF Page "
+                        f"{result['page_number']} "
+                        f"— Similarity Score: "
+                        f"{result['similarity']:.3f}"
                     )
 
 
-                # ------------------------------------------
-                # Step 4: Ask AI
-                # ------------------------------------------
+        except Exception as error:
 
-                with st.spinner(
-                    "Analyzing the financial report..."
-                ):
+            st.error(
+                "Something went wrong while analyzing "
+                "the financial report."
+            )
 
-                    prompt = f"""
-You are a professional financial research analyst.
-
-The user has uploaded a company's annual report or 10-K.
-
-Answer the user's question using ONLY the financial report
-excerpts provided below.
-
-IMPORTANT RULES:
-
-1. Do not invent financial information.
-2. If the report excerpts do not contain enough information,
-   clearly say that.
-3. Include important financial numbers when relevant.
-4. Compare financial periods when appropriate.
-5. Explain the answer clearly for someone studying finance.
-6. Cite the PDF page number supporting important claims.
-7. Distinguish between millions, billions, percentages,
-   and per-share amounts carefully.
-8. If useful, explain what the result may indicate about
-   the company's financial performance.
-9. Keep the answer focused on the question.
-
-USER QUESTION:
-
-{question}
-
-
-RELEVANT FINANCIAL REPORT EXCERPTS:
-
-{context}
-"""
-
-                    response = client.responses.create(
-                        model="gpt-5.6-luna",
-                        input=prompt,
-                        max_output_tokens=1500
-                    )
-
-
-                # ------------------------------------------
-                # Display answer
-                # ------------------------------------------
-
-                st.subheader("AI Analysis")
-
-                st.write(response.output_text)
-
-                st.caption(
-                    "Semantically retrieved PDF pages: "
-                    + ", ".join(
-                        map(str, selected_page_numbers)
-                    )
-                )
-
-
-                # ------------------------------------------
-                # Show retrieval details
-                # ------------------------------------------
-
-                with st.expander(
-                    "View semantic retrieval details"
-                ):
-
-                    for result in relevant_pages:
-
-                        st.write(
-                            f"Page {result['page_number']} "
-                            f"— Similarity score: "
-                            f"{result['similarity']:.3f}"
-                        )
-
-
-            except Exception as error:
-
-                st.error(
-                    "Something went wrong while analyzing the report."
-                )
-
-                st.write(error)
+            st.write(
+                error
+            )
 
 
     # --------------------------------------------------
     # Document preview
     # --------------------------------------------------
 
-    with st.expander("View extracted report text"):
+    st.divider()
+
+    with st.expander(
+        "📄 View extracted report text"
+    ):
 
         preview_text = ""
 
@@ -358,7 +617,7 @@ RELEVANT FINANCIAL REPORT EXCERPTS:
             )
 
         st.text_area(
-            "Extracted Text",
+            "Extracted Report Text",
             preview_text,
             height=400
         )
