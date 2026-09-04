@@ -2,6 +2,7 @@ import io
 import os
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -9,40 +10,117 @@ from pypdf import PdfReader
 
 
 # --------------------------------------------------
-# Load API key
+# Configuration
 # --------------------------------------------------
 
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 
+st.set_page_config(
+    page_title="AI Financial Report Analyzer",
+    page_icon="📊",
+    layout="wide",
+)
+
 if not api_key:
-    st.error("OpenAI API key was not found. Check your .env file.")
+    st.error("OpenAI API key was not found.")
     st.stop()
 
 client = OpenAI(api_key=api_key)
 
 
 # --------------------------------------------------
-# Page configuration
+# Custom styling
 # --------------------------------------------------
 
-st.set_page_config(
-    page_title="AI Financial Report Analyzer",
-    page_icon="📊",
-    layout="wide"
-)
+st.markdown(
+    """
+    <style>
+    .main-title {
+        font-size: 42px;
+        font-weight: 700;
+        margin-bottom: 0px;
+    }
 
-st.title("📊 AI Financial Report Analyzer")
+    .subtitle {
+        font-size: 18px;
+        color: #666;
+        margin-bottom: 25px;
+    }
 
-st.write(
-    "Upload a company's annual report or 10-K and perform "
-    "AI-powered financial analysis using semantic search."
+    .feature-box {
+        padding: 18px;
+        border: 1px solid #e6e6e6;
+        border-radius: 12px;
+        margin-bottom: 10px;
+    }
+
+    div[data-testid="stMetric"] {
+        border: 1px solid #e8e8e8;
+        padding: 15px;
+        border-radius: 12px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 
 # --------------------------------------------------
-# Extract PDF pages
+# Header
+# --------------------------------------------------
+
+st.markdown(
+    '<div class="main-title">📊 AI Financial Report Analyzer</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <div class="subtitle">
+    Analyze 10-Ks and annual reports using AI, semantic search,
+    and Retrieval-Augmented Generation (RAG).
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# --------------------------------------------------
+# Sidebar
+# --------------------------------------------------
+
+with st.sidebar:
+
+    st.header("About")
+
+    st.write(
+        "This application retrieves relevant sections from "
+        "financial reports and uses AI to perform finance-focused analysis."
+    )
+
+    st.divider()
+
+    st.subheader("Analysis Tools")
+
+    st.write("📌 Financial Snapshot")
+    st.write("💰 Revenue Analysis")
+    st.write("📈 Profitability Analysis")
+    st.write("💵 Cash Flow Analysis")
+    st.write("⚠️ Risk Analysis")
+    st.write("💬 Custom Questions")
+
+    st.divider()
+
+    st.caption(
+        "Built with Python, Streamlit, OpenAI, embeddings, "
+        "semantic search, and RAG."
+    )
+
+
+# --------------------------------------------------
+# Extract PDF
 # --------------------------------------------------
 
 @st.cache_data(show_spinner=False)
@@ -62,7 +140,7 @@ def extract_pdf_pages(file_bytes):
         pages.append(
             {
                 "page_number": page_number,
-                "text": text
+                "text": text,
             }
         )
 
@@ -70,7 +148,7 @@ def extract_pdf_pages(file_bytes):
 
 
 # --------------------------------------------------
-# Create page embeddings
+# Embeddings
 # --------------------------------------------------
 
 @st.cache_data(show_spinner=False)
@@ -87,7 +165,7 @@ def create_page_embeddings(page_texts):
 
     response = client.embeddings.create(
         model="text-embedding-3-small",
-        input=cleaned_texts
+        input=cleaned_texts,
     )
 
     return [
@@ -97,44 +175,37 @@ def create_page_embeddings(page_texts):
 
 
 # --------------------------------------------------
-# Semantic retrieval
+# Semantic search
 # --------------------------------------------------
 
 def find_relevant_pages(
     question,
     pages,
     page_embeddings,
-    top_k=10
+    top_k=10,
 ):
 
     question_response = client.embeddings.create(
         model="text-embedding-3-small",
-        input=question
+        input=question,
     )
 
     question_embedding = np.array(
         question_response.data[0].embedding,
-        dtype=np.float32
+        dtype=np.float32,
     )
 
     document_embeddings = np.array(
         page_embeddings,
-        dtype=np.float32
-    )
-
-    question_norm = np.linalg.norm(
-        question_embedding
-    )
-
-    document_norms = np.linalg.norm(
-        document_embeddings,
-        axis=1
+        dtype=np.float32,
     )
 
     similarities = (
         document_embeddings @ question_embedding
     ) / (
-        document_norms * question_norm + 1e-10
+        np.linalg.norm(document_embeddings, axis=1)
+        * np.linalg.norm(question_embedding)
+        + 1e-10
     )
 
     best_indexes = np.argsort(
@@ -149,7 +220,7 @@ def find_relevant_pages(
             {
                 "page_number": pages[index]["page_number"],
                 "text": pages[index]["text"],
-                "similarity": float(similarities[index])
+                "similarity": float(similarities[index]),
             }
         )
 
@@ -157,21 +228,21 @@ def find_relevant_pages(
 
 
 # --------------------------------------------------
-# Analyze retrieved pages
+# AI analysis
 # --------------------------------------------------
 
 def analyze_financial_report(
     question,
     analysis_name,
     pages,
-    page_embeddings
+    page_embeddings,
 ):
 
     relevant_pages = find_relevant_pages(
         question,
         pages,
         page_embeddings,
-        top_k=10
+        top_k=10,
     )
 
     context = ""
@@ -190,10 +261,7 @@ def analyze_financial_report(
         )
 
     prompt = f"""
-You are a professional equity research and financial analysis assistant.
-
-You are analyzing excerpts retrieved from a company's annual
-report or Form 10-K.
+You are a professional financial analyst.
 
 ANALYSIS TYPE:
 {analysis_name}
@@ -201,46 +269,23 @@ ANALYSIS TYPE:
 USER REQUEST:
 {question}
 
-Use ONLY the report excerpts supplied below.
+Use ONLY the financial report excerpts below.
 
-FINANCIAL ANALYSIS RULES:
+RULES:
 
-1. Never invent or estimate a number that is not supported
-   by the supplied report excerpts.
-
-2. Clearly distinguish between:
-   - millions
-   - billions
-   - percentages
-   - per-share amounts
-
-3. Always include a space between a financial number and its unit.
-   Example: $416.2 billion, not $416.2billion.
-
-4. Compare the latest year with prior years whenever the
-   necessary information is available.
-
-5. Calculate percentage changes only when the underlying
-   values are available.
-
-6. Explain significant increases or decreases.
-
-7. Identify important business drivers mentioned in the report.
-
-8. Cite important claims using:
-   (PDF p. X)
-
-9. If information cannot be found in the retrieved excerpts,
-   explicitly say that the information was not available.
-
-10. Provide interpretation from a finance perspective, but do
-    not provide investment advice.
-
-11. Keep the response structured and easy to read.
-
-12. Use clean Markdown headings and bullet points.
-
-13. Do not produce broken Markdown formatting.
+1. Never invent financial information.
+2. Clearly distinguish millions, billions, percentages,
+   and per-share amounts.
+3. Compare periods when data is available.
+4. Calculate percentage changes when possible.
+5. Explain important financial drivers.
+6. Cite important claims using (PDF p. X).
+7. Clearly state when information is unavailable.
+8. Provide finance-focused interpretation.
+9. Do not provide investment advice.
+10. Use clean Markdown headings and bullet points.
+11. Always put spaces between numbers and units.
+12. Keep the answer professional and concise.
 
 REPORT EXCERPTS:
 
@@ -250,64 +295,90 @@ REPORT EXCERPTS:
     response = client.responses.create(
         model="gpt-5.6-luna",
         input=prompt,
-        max_output_tokens=1800
+        max_output_tokens=1800,
     )
 
     return (
         response.output_text,
         relevant_pages,
-        selected_page_numbers
+        selected_page_numbers,
     )
 
 
 # --------------------------------------------------
-# Upload report
+# Upload
 # --------------------------------------------------
 
 uploaded_file = st.file_uploader(
-    "Upload a Financial Report",
-    type=["pdf"]
+    "Upload a 10-K or Annual Report",
+    type=["pdf"],
 )
 
 
-if uploaded_file is not None:
+if uploaded_file is None:
 
-    file_bytes = uploaded_file.getvalue()
-
-    pages = extract_pdf_pages(
-        file_bytes
+    st.info(
+        "Upload a PDF financial report to begin."
     )
 
-    st.success(
-        "Financial report uploaded successfully!"
-    )
+    st.markdown("### What this application can do")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric(
-            "Pages in Report",
-            len(pages)
+        st.markdown(
+            """
+            <div class="feature-box">
+            <b>📊 Analyze Financials</b><br><br>
+            Revenue, profitability, cash flow, EPS,
+            assets, liabilities, and more.
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
     with col2:
-        st.metric(
-            "Analysis Engine",
-            "Semantic RAG"
+        st.markdown(
+            """
+            <div class="feature-box">
+            <b>🧠 Semantic RAG</b><br><br>
+            Retrieves relevant report pages instead of
+            sending the entire document.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col3:
+        st.markdown(
+            """
+            <div class="feature-box">
+            <b>🔎 Source Citations</b><br><br>
+            Financial answers include supporting
+            PDF page references.
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
 
-    # --------------------------------------------------
-    # Create semantic index
-    # --------------------------------------------------
+else:
+
+    file_bytes = uploaded_file.getvalue()
+
+    pages = extract_pdf_pages(file_bytes)
 
     page_texts = [
         page["text"]
         for page in pages
     ]
 
+    st.success(
+        f"Loaded: {uploaded_file.name}"
+    )
+
     with st.spinner(
-        "Preparing financial report for semantic search..."
+        "Building semantic search index..."
     ):
 
         page_embeddings = create_page_embeddings(
@@ -315,45 +386,66 @@ if uploaded_file is not None:
         )
 
 
+    # --------------------------------------------------
+    # Report dashboard
+    # --------------------------------------------------
+
+    st.markdown("## Report Dashboard")
+
+    metric1, metric2, metric3 = st.columns(3)
+
+    with metric1:
+        st.metric(
+            "Pages",
+            len(pages),
+        )
+
+    with metric2:
+        st.metric(
+            "AI Engine",
+            "Semantic RAG",
+        )
+
+    with metric3:
+        st.metric(
+            "Status",
+            "Ready",
+        )
+
     st.divider()
 
 
     # --------------------------------------------------
-    # Quick finance analysis
+    # Analysis buttons
     # --------------------------------------------------
 
-    st.subheader("⚡ Quick Financial Analysis")
+    st.markdown("## ⚡ Quick Financial Analysis")
 
-    st.write(
-        "Choose an analysis below or ask your own question."
+    st.caption(
+        "Select an analysis below or ask a custom question."
     )
 
-    button1, button2, button3 = st.columns(3)
+    row1_col1, row1_col2, row1_col3 = st.columns(3)
 
-    button4, button5 = st.columns(2)
+    row2_col1, row2_col2 = st.columns(2)
 
-
-    analysis_question = None
     analysis_name = None
+    analysis_question = None
 
 
-    with button1:
+    with row1_col1:
 
         if st.button(
             "📌 Financial Snapshot",
-            use_container_width=True
+            use_container_width=True,
         ):
 
             analysis_name = "Financial Snapshot"
 
             analysis_question = """
-Provide a financial snapshot of the company.
+Provide a complete financial snapshot.
 
-Find the company's consolidated financial statements,
-including the income statement, balance sheet, and cash flow
-statement.
-
-Identify the most recent available figures for:
+Find:
 
 - Revenue or net sales
 - Net income
@@ -364,114 +456,109 @@ Identify the most recent available figures for:
 - Total assets
 - Total liabilities
 
-Compare each figure with the prior year where possible.
+Compare the latest year with the prior year.
 
-Pay special attention to pages containing:
-- Consolidated Statements of Operations
-- Consolidated Balance Sheets
-- Consolidated Statements of Cash Flows
+Pay particular attention to the company's consolidated
+income statement, balance sheet, and cash flow statement.
 
-Highlight the most important year-over-year changes and explain
-what they suggest about the company's financial performance.
+Highlight the most important year-over-year changes.
 """
 
 
-    with button2:
+    with row1_col2:
 
         if st.button(
             "💰 Revenue Analysis",
-            use_container_width=True
+            use_container_width=True,
         ):
 
             analysis_name = "Revenue Analysis"
 
             analysis_question = """
-Analyze the company's revenue or net sales performance.
+Analyze revenue performance.
 
 Include:
 
-- Current-year revenue
+- Latest-year revenue
 - Prior-year revenue
 - Dollar change
 - Percentage change
-- Major products, services, or segments driving revenue
-- Geographic trends if available
-- Management explanations for major changes
+- Product or service revenue trends
+- Segment trends
+- Geographic trends
+- Important revenue drivers
 
-Conclude with a brief interpretation of the revenue trend.
+Finish with a short finance interpretation.
 """
 
 
-    with button3:
+    with row1_col3:
 
         if st.button(
             "📈 Profitability Analysis",
-            use_container_width=True
+            use_container_width=True,
         ):
 
             analysis_name = "Profitability Analysis"
 
             analysis_question = """
-Analyze the company's profitability.
+Analyze profitability.
 
-Look for:
+Include:
 
-- Gross profit or gross margin
+- Gross margin
 - Operating income
 - Operating margin
 - Net income
 - Net margin
 - Earnings per share
 
-Compare the latest year with the prior year where possible.
+Compare the latest year with the prior year.
 
-Explain the major drivers of profitability changes.
+Explain the major reasons profitability changed.
 """
 
 
-    with button4:
+    with row2_col1:
 
         if st.button(
             "💵 Cash Flow Analysis",
-            use_container_width=True
+            use_container_width=True,
         ):
 
             analysis_name = "Cash Flow Analysis"
 
             analysis_question = """
-Analyze the company's cash flow position.
+Analyze cash flow performance.
 
-Focus on:
+Include:
 
-- Cash flow from operating activities
+- Operating cash flow
 - Capital expenditures
 - Investing activities
 - Financing activities
 - Share repurchases
 - Dividends
 - Cash balance
+- Approximate free cash flow when possible
 
-If enough information exists, discuss approximate free cash
-flow using operating cash flow minus capital expenditures.
-
-Explain what the cash flow profile suggests about the company.
+Explain what the cash flow profile suggests.
 """
 
 
-    with button5:
+    with row2_col2:
 
         if st.button(
             "⚠️ Risk Analysis",
-            use_container_width=True
+            use_container_width=True,
         ):
 
             analysis_name = "Risk Analysis"
 
             analysis_question = """
-Identify and analyze the most important risks disclosed in
-the company's annual report.
+Analyze the company's major risks.
 
-Group risks into useful categories such as:
+Consider:
 
 - Business risk
 - Financial risk
@@ -482,24 +569,31 @@ Group risks into useful categories such as:
 - Technology risk
 - Competitive risk
 
-Explain which risks appear most significant based on the report.
+Rank or emphasize the most important risks
+based on the report.
 """
 
 
     # --------------------------------------------------
-    # Custom question
+    # Custom questions
     # --------------------------------------------------
 
     st.divider()
 
-    st.subheader("💬 Ask Your Own Question")
+    st.markdown("## 💬 Ask Your Own Financial Question")
 
     custom_question = st.text_input(
-        "Enter a financial question about the report:"
+        "Question",
+        placeholder=(
+            "Example: How did operating income change "
+            "compared with last year?"
+        ),
+        label_visibility="collapsed",
     )
 
     if st.button(
-        "Analyze Custom Question"
+        "Analyze Question",
+        use_container_width=True,
     ):
 
         if custom_question.strip():
@@ -511,12 +605,12 @@ Explain which risks appear most significant based on the report.
         else:
 
             st.warning(
-                "Please enter a question first."
+                "Enter a question first."
             )
 
 
     # --------------------------------------------------
-    # Run selected analysis
+    # Run analysis
     # --------------------------------------------------
 
     if analysis_question:
@@ -524,61 +618,102 @@ Explain which risks appear most significant based on the report.
         try:
 
             with st.spinner(
-                "Retrieving relevant sections and performing "
-                "financial analysis..."
+                "Retrieving relevant sections and analyzing..."
             ):
 
                 (
                     answer,
                     relevant_pages,
-                    selected_page_numbers
+                    selected_page_numbers,
                 ) = analyze_financial_report(
                     analysis_question,
                     analysis_name,
                     pages,
-                    page_embeddings
+                    page_embeddings,
                 )
-
 
             st.divider()
 
-            st.subheader(
-                f"📊 {analysis_name}"
+            st.markdown(
+                f"## 📊 {analysis_name}"
             )
 
-            # Escape dollar signs so Streamlit does not
-            # interpret financial values as LaTeX math.
-            clean_answer = answer.replace("$", r"\$")
+            clean_answer = answer.replace(
+                "$",
+                r"\$",
+            )
 
             st.markdown(
                 clean_answer
             )
 
-
             st.caption(
-                "Semantically retrieved PDF pages: "
+                "Source pages retrieved: "
                 + ", ".join(
                     map(
                         str,
-                        selected_page_numbers
+                        selected_page_numbers,
                     )
                 )
             )
 
 
-            # --------------------------------------------------
+            # ----------------------------------------------
+            # Retrieval chart
+            # ----------------------------------------------
+
+            st.markdown(
+                "### 🔎 Semantic Retrieval Confidence"
+            )
+
+            retrieval_data = pd.DataFrame(
+                {
+                    "PDF Page": [
+                        str(result["page_number"])
+                        for result in relevant_pages
+                    ],
+                    "Similarity Score": [
+                        result["similarity"]
+                        for result in relevant_pages
+                    ],
+                }
+            )
+
+            st.bar_chart(
+                retrieval_data.set_index(
+                    "PDF Page"
+                )
+            )
+
+
+            # ----------------------------------------------
+            # Download answer
+            # ----------------------------------------------
+
+            st.download_button(
+                label="⬇️ Download Analysis",
+                data=answer,
+                file_name=(
+                    analysis_name.lower()
+                    .replace(" ", "_")
+                    + ".txt"
+                ),
+                mime="text/plain",
+            )
+
+
+            # ----------------------------------------------
             # Retrieval details
-            # --------------------------------------------------
+            # ----------------------------------------------
 
             with st.expander(
-                "🔍 View semantic retrieval details"
+                "View retrieval details"
             ):
 
                 for result in relevant_pages:
 
                     st.write(
-                        f"PDF Page "
-                        f"{result['page_number']} "
+                        f"PDF Page {result['page_number']} "
                         f"— Similarity Score: "
                         f"{result['similarity']:.3f}"
                     )
@@ -587,23 +722,20 @@ Explain which risks appear most significant based on the report.
         except Exception as error:
 
             st.error(
-                "Something went wrong while analyzing "
-                "the financial report."
+                "Something went wrong while analyzing the report."
             )
 
-            st.write(
-                error
-            )
+            st.write(error)
 
 
     # --------------------------------------------------
-    # Document preview
+    # PDF preview
     # --------------------------------------------------
 
     st.divider()
 
     with st.expander(
-        "📄 View extracted report text"
+        "📄 View Extracted Report Text"
     ):
 
         preview_text = ""
@@ -617,7 +749,7 @@ Explain which risks appear most significant based on the report.
             )
 
         st.text_area(
-            "Extracted Report Text",
+            "Extracted report text",
             preview_text,
-            height=400
+            height=400,
         )
