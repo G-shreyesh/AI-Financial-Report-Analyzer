@@ -1,4 +1,5 @@
 import io
+import json
 import os
 
 import numpy as np
@@ -8,17 +9,19 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pypdf import PdfReader
 
+from document_reader import extract_document_content
 
-# --------------------------------------------------
-# Configuration
-# --------------------------------------------------
+
+# ==========================================================
+# CONFIGURATION
+# ==========================================================
 
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 
 st.set_page_config(
-    page_title="AI Financial Report Analyzer",
+    page_title="AI Company Document Analyzer",
     page_icon="📊",
     layout="wide",
 )
@@ -30,13 +33,14 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 
-# --------------------------------------------------
-# Custom styling
-# --------------------------------------------------
+# ==========================================================
+# CUSTOM STYLING
+# ==========================================================
 
 st.markdown(
     """
     <style>
+
     .main-title {
         font-size: 42px;
         font-weight: 700;
@@ -45,7 +49,7 @@ st.markdown(
 
     .subtitle {
         font-size: 18px;
-        color: #666;
+        color: #777;
         margin-bottom: 25px;
     }
 
@@ -54,6 +58,7 @@ st.markdown(
         border: 1px solid #e6e6e6;
         border-radius: 12px;
         margin-bottom: 10px;
+        min-height: 140px;
     }
 
     div[data-testid="stMetric"] {
@@ -61,107 +66,366 @@ st.markdown(
         padding: 15px;
         border-radius: 12px;
     }
+
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-# --------------------------------------------------
-# Header
-# --------------------------------------------------
+# ==========================================================
+# HEADER
+# ==========================================================
 
 st.markdown(
-    '<div class="main-title">📊 AI Financial Report Analyzer</div>',
+    '<div class="main-title">📊 AI Company Document Analyzer</div>',
     unsafe_allow_html=True,
 )
 
 st.markdown(
     """
     <div class="subtitle">
-    Analyze 10-Ks and annual reports using AI, semantic search,
-    and Retrieval-Augmented Generation (RAG).
+    Upload company documents and automatically analyze financial,
+    operational, strategic, and risk information using AI,
+    semantic search, and Retrieval-Augmented Generation (RAG).
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 
-# --------------------------------------------------
-# Sidebar
-# --------------------------------------------------
+# ==========================================================
+# SIDEBAR
+# ==========================================================
 
 with st.sidebar:
 
     st.header("About")
 
     st.write(
-        "This application retrieves relevant sections from "
-        "financial reports and uses AI to perform finance-focused analysis."
+        "This application analyzes many common company documents "
+        "using AI, vector embeddings, semantic search, and RAG."
     )
+
+    st.divider()
+
+    st.subheader("Supported Files")
+
+    st.write("📄 PDF")
+    st.write("📊 Excel")
+    st.write("📑 CSV")
+    st.write("📝 Word")
+    st.write("📽️ PowerPoint")
+    st.write("📃 TXT")
 
     st.divider()
 
     st.subheader("Analysis Tools")
 
+    st.write("🏢 Company Overview")
     st.write("📌 Financial Snapshot")
     st.write("💰 Revenue Analysis")
     st.write("📈 Profitability Analysis")
     st.write("💵 Cash Flow Analysis")
     st.write("⚠️ Risk Analysis")
+    st.write("📄 Document Summary")
     st.write("💬 Custom Questions")
 
     st.divider()
 
     st.caption(
-        "Built with Python, Streamlit, OpenAI, embeddings, "
-        "semantic search, and RAG."
+        "Built with Python, Streamlit, OpenAI, "
+        "embeddings, semantic search, and RAG."
     )
 
 
-# --------------------------------------------------
-# Extract PDF
-# --------------------------------------------------
+# ==========================================================
+# PDF EXTRACTION
+# ==========================================================
 
 @st.cache_data(show_spinner=False)
 def extract_pdf_pages(file_bytes):
 
     reader = PdfReader(io.BytesIO(file_bytes))
 
-    pages = []
+    sections = []
 
-    for page_number, page in enumerate(reader.pages, start=1):
+    for page_number, page in enumerate(
+        reader.pages,
+        start=1,
+    ):
 
         text = page.extract_text()
 
         if text is None:
             text = ""
 
-        pages.append(
-            {
-                "page_number": page_number,
-                "text": text,
-            }
+        if text.strip():
+
+            sections.append(
+                {
+                    "source": f"PDF Page {page_number}",
+                    "citation": f"PDF p. {page_number}",
+                    "text": text,
+                }
+            )
+
+    return sections
+
+
+# ==========================================================
+# GENERIC TEXT CHUNKING
+# ==========================================================
+
+def create_text_sections(
+    text,
+    chunk_size=5000,
+    overlap=500,
+):
+
+    if not text:
+        return []
+
+    text = str(text)
+
+    sections = []
+
+    start = 0
+    section_number = 1
+
+    while start < len(text):
+
+        end = start + chunk_size
+
+        chunk = text[start:end]
+
+        if chunk.strip():
+
+            sections.append(
+                {
+                    "source": f"Section {section_number}",
+                    "citation": f"Section {section_number}",
+                    "text": chunk,
+                }
+            )
+
+            section_number += 1
+
+        if end >= len(text):
+            break
+
+        start = end - overlap
+
+    return sections
+
+
+# ==========================================================
+# DOCUMENT EXTRACTION
+# ==========================================================
+
+def process_uploaded_document(uploaded_file):
+
+    filename = uploaded_file.name
+
+    extension = os.path.splitext(
+        filename
+    )[1].lower()
+
+    # ------------------------------------------------------
+    # PDF
+    # ------------------------------------------------------
+
+    if extension == ".pdf":
+
+        file_bytes = uploaded_file.getvalue()
+
+        sections = extract_pdf_pages(
+            file_bytes
         )
 
-    return pages
+        full_text = "\n\n".join(
+            section["text"]
+            for section in sections
+        )
+
+        return {
+            "success": True,
+            "filename": filename,
+            "extension": extension,
+            "sections": sections,
+            "full_text": full_text,
+            "error": None,
+        }
+
+    # ------------------------------------------------------
+    # OTHER DOCUMENT TYPES
+    # ------------------------------------------------------
+
+    try:
+
+        uploaded_file.seek(0)
+
+        result = extract_document_content(
+            uploaded_file
+        )
+
+    except Exception as error:
+
+        return {
+            "success": False,
+            "filename": filename,
+            "extension": extension,
+            "sections": [],
+            "full_text": "",
+            "error": str(error),
+        }
+
+    if not result["success"]:
+
+        return {
+            "success": False,
+            "filename": filename,
+            "extension": extension,
+            "sections": [],
+            "full_text": "",
+            "error": result["error"],
+        }
+
+    full_text = result["content"]
+
+    sections = create_text_sections(
+        full_text
+    )
+
+    return {
+        "success": True,
+        "filename": filename,
+        "extension": extension,
+        "sections": sections,
+        "full_text": full_text,
+        "error": None,
+    }
 
 
-# --------------------------------------------------
-# Embeddings
-# --------------------------------------------------
+# ==========================================================
+# DOCUMENT IDENTIFICATION
+# ==========================================================
 
 @st.cache_data(show_spinner=False)
-def create_page_embeddings(page_texts):
+def identify_document(
+    filename,
+    document_text,
+):
+
+    sample = document_text[:25000]
+
+    prompt = f"""
+You are analyzing a document uploaded to a company intelligence system.
+
+FILE NAME:
+{filename}
+
+DOCUMENT CONTENT SAMPLE:
+{sample}
+
+Identify the document.
+
+Return ONLY valid JSON.
+
+Use this exact structure:
+
+{{
+    "company_name": "company name or Unknown",
+    "document_type": "document type",
+    "reporting_period": "reporting period or Unknown",
+    "fiscal_year": "year or Unknown",
+    "primary_focus": "Financial, Operational, Strategic, Regulatory, Investor, or General",
+    "confidence": "High, Medium, or Low"
+}}
+
+Possible document types include, but are not limited to:
+
+- 10-K
+- 10-Q
+- Annual Report
+- Earnings Release
+- Investor Presentation
+- Financial Statements
+- Income Statement
+- Balance Sheet
+- Cash Flow Statement
+- Excel Financial Model
+- Budget
+- Forecast
+- Accounts Receivable Report
+- Sales Report
+- Operational Report
+- Strategy Document
+- Regulatory Filing
+- Company Presentation
+- Company Memo
+- Other Company Document
+
+Do not invent information that is not present.
+"""
+
+    try:
+
+        response = client.responses.create(
+            model="gpt-5.6-luna",
+            input=prompt,
+            max_output_tokens=500,
+        )
+
+        response_text = (
+            response.output_text
+            .replace("```json", "")
+            .replace("```", "")
+            .strip()
+        )
+
+        data = json.loads(
+            response_text
+        )
+
+        return data
+
+    except Exception:
+
+        return {
+            "company_name": "Unknown",
+            "document_type": "Company Document",
+            "reporting_period": "Unknown",
+            "fiscal_year": "Unknown",
+            "primary_focus": "General",
+            "confidence": "Low",
+        }
+
+
+# ==========================================================
+# EMBEDDINGS
+# ==========================================================
+
+@st.cache_data(show_spinner=False)
+def create_section_embeddings(
+    section_texts,
+):
 
     cleaned_texts = []
 
-    for text in page_texts:
+    for text in section_texts:
 
         if text.strip():
-            cleaned_texts.append(text[:12000])
+
+            cleaned_texts.append(
+                text[:12000]
+            )
+
         else:
-            cleaned_texts.append("Blank page")
+
+            cleaned_texts.append(
+                "Blank section"
+            )
 
     response = client.embeddings.create(
         model="text-embedding-3-small",
@@ -174,15 +438,15 @@ def create_page_embeddings(page_texts):
     ]
 
 
-# --------------------------------------------------
-# Semantic search
-# --------------------------------------------------
+# ==========================================================
+# SEMANTIC SEARCH
+# ==========================================================
 
-def find_relevant_pages(
+def find_relevant_sections(
     question,
-    pages,
-    page_embeddings,
-    top_k=10,
+    sections,
+    section_embeddings,
+    top_k=8,
 ):
 
     question_response = client.embeddings.create(
@@ -196,16 +460,27 @@ def find_relevant_pages(
     )
 
     document_embeddings = np.array(
-        page_embeddings,
+        section_embeddings,
         dtype=np.float32,
     )
 
     similarities = (
-        document_embeddings @ question_embedding
+        document_embeddings
+        @ question_embedding
     ) / (
-        np.linalg.norm(document_embeddings, axis=1)
-        * np.linalg.norm(question_embedding)
+        np.linalg.norm(
+            document_embeddings,
+            axis=1,
+        )
+        * np.linalg.norm(
+            question_embedding
+        )
         + 1e-10
+    )
+
+    top_k = min(
+        top_k,
+        len(sections),
     )
 
     best_indexes = np.argsort(
@@ -218,49 +493,81 @@ def find_relevant_pages(
 
         results.append(
             {
-                "page_number": pages[index]["page_number"],
-                "text": pages[index]["text"],
-                "similarity": float(similarities[index]),
+                "source": sections[index]["source"],
+                "citation": sections[index]["citation"],
+                "text": sections[index]["text"],
+                "similarity": float(
+                    similarities[index]
+                ),
             }
         )
 
     return results
 
 
-# --------------------------------------------------
-# AI analysis
-# --------------------------------------------------
+# ==========================================================
+# AI ANALYSIS
+# ==========================================================
 
-def analyze_financial_report(
+def analyze_company_document(
     question,
     analysis_name,
-    pages,
-    page_embeddings,
+    document_profile,
+    sections,
+    section_embeddings,
 ):
 
-    relevant_pages = find_relevant_pages(
+    relevant_sections = find_relevant_sections(
         question,
-        pages,
-        page_embeddings,
-        top_k=10,
+        sections,
+        section_embeddings,
+        top_k=8,
     )
 
     context = ""
-    selected_page_numbers = []
 
-    for result in relevant_pages:
+    source_names = []
 
-        page_number = result["page_number"]
+    for result in relevant_sections:
 
-        selected_page_numbers.append(page_number)
+        source = result["source"]
+
+        citation = result["citation"]
+
+        source_names.append(source)
 
         context += (
-            f"\n\n--- PDF PAGE {page_number} ---\n\n"
+            f"\n\n--- {source} ---\n"
+            f"CITATION LABEL: {citation}\n\n"
             f"{result['text']}"
         )
 
+    company_name = document_profile.get(
+        "company_name",
+        "Unknown",
+    )
+
+    document_type = document_profile.get(
+        "document_type",
+        "Company Document",
+    )
+
+    reporting_period = document_profile.get(
+        "reporting_period",
+        "Unknown",
+    )
+
     prompt = f"""
-You are a professional financial analyst.
+You are a professional financial and business analyst.
+
+COMPANY:
+{company_name}
+
+DOCUMENT TYPE:
+{document_type}
+
+REPORTING PERIOD:
+{reporting_period}
 
 ANALYSIS TYPE:
 {analysis_name}
@@ -268,25 +575,50 @@ ANALYSIS TYPE:
 USER REQUEST:
 {question}
 
-Use ONLY the financial report excerpts below.
+Use ONLY the retrieved document excerpts below.
 
 RULES:
 
-1. Never invent financial information.
-2. Clearly distinguish millions, billions, percentages,
-   and per-share amounts.
-3. Compare periods when data is available.
-4. Calculate percentage changes when possible.
-5. Explain important financial drivers.
-6. Cite important claims using (PDF p. X).
-7. Clearly state when information is unavailable.
-8. Provide finance-focused interpretation.
-9. Do not provide investment advice.
-10. Use clean Markdown headings and bullet points.
-11. Always put spaces between numbers and units.
-12. Keep the answer professional and concise.
+1. Never invent numbers, facts, dates, business events,
+   financial metrics, or management statements.
 
-REPORT EXCERPTS:
+2. If information is unavailable, explicitly say so.
+
+3. Distinguish facts reported in the document from your analysis.
+
+4. Preserve units carefully:
+   dollars, thousands, millions, billions,
+   percentages, per-share values, etc.
+
+5. Compare periods only when the document provides
+   comparable information.
+
+6. Calculate percentage changes only when enough
+   information is available.
+
+7. Explain meaningful financial or business drivers.
+
+8. Cite important claims using the exact CITATION LABEL
+   supplied with the excerpt.
+
+9. For PDF documents citations may look like:
+   (PDF p. 15)
+
+10. For non-PDF documents citations may look like:
+    (Section 4)
+
+11. Do not claim that missing information exists.
+
+12. Do not provide investment advice.
+
+13. Use clean Markdown headings and bullet points.
+
+14. Keep the answer professional and easy to understand.
+
+15. Focus the analysis on the type of document uploaded.
+    Do not treat every document as a 10-K.
+
+DOCUMENT EXCERPTS:
 
 {context}
 """
@@ -294,310 +626,554 @@ REPORT EXCERPTS:
     response = client.responses.create(
         model="gpt-5.6-luna",
         input=prompt,
-        max_output_tokens=1800,
+        max_output_tokens=2200,
     )
 
     return (
         response.output_text,
-        relevant_pages,
-        selected_page_numbers,
+        relevant_sections,
+        source_names,
     )
 
 
-# --------------------------------------------------
-# Upload
-# --------------------------------------------------
+# ==========================================================
+# FILE UPLOAD
+# ==========================================================
 
 uploaded_file = st.file_uploader(
-    "Upload a 10-K or Annual Report",
-    type=["pdf"],
+    "Upload a Company Document",
+    type=[
+        "pdf",
+        "xlsx",
+        "csv",
+        "docx",
+        "pptx",
+        "txt",
+    ],
+    help=(
+        "Supported formats: PDF, Excel (.xlsx), "
+        "CSV, Word (.docx), PowerPoint (.pptx), and TXT."
+    ),
 )
 
 
-# --------------------------------------------------
-# Before report upload
-# --------------------------------------------------
+# ==========================================================
+# BEFORE FILE UPLOAD
+# ==========================================================
 
 if uploaded_file is None:
 
     st.info(
-        "Upload a PDF financial report to begin."
+        "Upload a company document to begin."
     )
 
-    st.markdown("### What this application can do")
+    st.markdown(
+        "### What this application can analyze"
+    )
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
+
         st.markdown(
             """
             <div class="feature-box">
-            <b>📊 Analyze Financials</b><br><br>
-            Revenue, profitability, cash flow, EPS,
-            assets, liabilities, and more.
+            <b>📊 Financial Documents</b><br><br>
+            10-Ks, 10-Qs, annual reports, financial statements,
+            earnings releases, Excel models, budgets, and forecasts.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
     with col2:
+
         st.markdown(
             """
             <div class="feature-box">
-            <b>🧠 Semantic RAG</b><br><br>
-            Retrieves relevant report pages instead of
-            sending the entire document.
+            <b>🏢 Company Documents</b><br><br>
+            Investor presentations, operational reports,
+            strategy documents, sales reports, company presentations,
+            and other business materials.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
     with col3:
+
         st.markdown(
             """
             <div class="feature-box">
-            <b>🔎 Source Citations</b><br><br>
-            Financial answers include supporting
-            PDF page references.
+            <b>🧠 Intelligent Analysis</b><br><br>
+            Automatically identifies the document, retrieves
+            relevant information, and performs context-aware analysis.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
 
-# --------------------------------------------------
-# After report upload
-# --------------------------------------------------
+# ==========================================================
+# AFTER FILE UPLOAD
+# ==========================================================
 
 else:
 
-    file_bytes = uploaded_file.getvalue()
+    with st.spinner(
+        "Reading document..."
+    ):
 
-    pages = extract_pdf_pages(file_bytes)
+        document = process_uploaded_document(
+            uploaded_file
+        )
 
-    page_texts = [
-        page["text"]
-        for page in pages
-    ]
+    if not document["success"]:
+
+        st.error(
+            "The document could not be processed."
+        )
+
+        st.write(
+            document["error"]
+        )
+
+        st.stop()
+
+    sections = document["sections"]
+
+    full_text = document["full_text"]
+
+    if not sections:
+
+        st.error(
+            "No readable content was found in this document."
+        )
+
+        st.stop()
 
     st.success(
         f"Loaded: {uploaded_file.name}"
     )
 
+
+    # ======================================================
+    # DOCUMENT IDENTIFICATION
+    # ======================================================
+
+    with st.spinner(
+        "Identifying document..."
+    ):
+
+        document_profile = identify_document(
+            uploaded_file.name,
+            full_text,
+        )
+
+
+    # ======================================================
+    # SEMANTIC INDEX
+    # ======================================================
+
+    section_texts = [
+        section["text"]
+        for section in sections
+    ]
+
     with st.spinner(
         "Building semantic search index..."
     ):
 
-        page_embeddings = create_page_embeddings(
-            page_texts
+        section_embeddings = create_section_embeddings(
+            section_texts
         )
 
 
-    # --------------------------------------------------
-    # Report dashboard
-    # --------------------------------------------------
+    # ======================================================
+    # DOCUMENT DASHBOARD
+    # ======================================================
 
-    st.markdown("## Report Dashboard")
+    st.markdown(
+        "## 🧠 Document Intelligence"
+    )
 
-    metric1, metric2, metric3 = st.columns(3)
+    metric1, metric2, metric3, metric4 = st.columns(
+        4
+    )
 
     with metric1:
+
         st.metric(
-            "Pages",
-            len(pages),
+            "Company",
+            document_profile.get(
+                "company_name",
+                "Unknown",
+            ),
         )
 
     with metric2:
+
         st.metric(
-            "AI Engine",
-            "Semantic RAG",
+            "Document Type",
+            document_profile.get(
+                "document_type",
+                "Unknown",
+            ),
         )
 
     with metric3:
-        st.metric(
-            "Status",
-            "Ready",
+
+        period = document_profile.get(
+            "reporting_period",
+            "Unknown",
         )
+
+        if period == "Unknown":
+
+            period = document_profile.get(
+                "fiscal_year",
+                "Unknown",
+            )
+
+        st.metric(
+            "Reporting Period",
+            period,
+        )
+
+    with metric4:
+
+        st.metric(
+            "Identification Confidence",
+            document_profile.get(
+                "confidence",
+                "Unknown",
+            ),
+        )
+
+    st.caption(
+        "Primary focus detected: "
+        + document_profile.get(
+            "primary_focus",
+            "General",
+        )
+    )
 
     st.divider()
 
 
-    # --------------------------------------------------
-    # Analysis buttons
-    # --------------------------------------------------
+    # ======================================================
+    # ANALYSIS BUTTONS
+    # ======================================================
 
-    st.markdown("## ⚡ Quick Financial Analysis")
-
-    st.caption(
-        "Select an analysis below or ask a custom question."
+    st.markdown(
+        "## ⚡ AI Analysis"
     )
 
-    row1_col1, row1_col2, row1_col3 = st.columns(3)
-    row2_col1, row2_col2 = st.columns(2)
+    st.caption(
+        "Choose an analysis or ask your own question."
+    )
+
+    row1_col1, row1_col2, row1_col3 = st.columns(
+        3
+    )
+
+    row2_col1, row2_col2, row2_col3 = st.columns(
+        3
+    )
 
     analysis_name = None
+
     analysis_question = None
 
 
-    # Financial Snapshot
+    # ------------------------------------------------------
+    # COMPANY OVERVIEW
+    # ------------------------------------------------------
+
     with row1_col1:
+
+        if st.button(
+            "🏢 Company Overview",
+            use_container_width=True,
+        ):
+
+            analysis_name = (
+                "Company Overview"
+            )
+
+            analysis_question = """
+Provide an executive overview of the company based only
+on this document.
+
+Identify when available:
+
+- Main business
+- Products or services
+- Major business segments
+- Geographic presence
+- Important customers or markets
+- Current priorities
+- Major recent developments
+- Important financial information
+- Main opportunities
+- Main challenges
+
+Conclude with the most important takeaways from the document.
+"""
+
+
+    # ------------------------------------------------------
+    # FINANCIAL SNAPSHOT
+    # ------------------------------------------------------
+
+    with row1_col2:
 
         if st.button(
             "📌 Financial Snapshot",
             use_container_width=True,
         ):
 
-            analysis_name = "Financial Snapshot"
+            analysis_name = (
+                "Financial Snapshot"
+            )
 
             analysis_question = """
-Provide a complete financial snapshot.
+Provide a financial snapshot using only information
+available in this document.
 
-Find:
+Look for:
 
 - Revenue or net sales
-- Net income
+- Gross profit
 - Operating income
+- Net income
 - Earnings per share
 - Operating cash flow
 - Cash and cash equivalents
 - Total assets
 - Total liabilities
+- Debt
+- Equity
+- Important financial ratios
 
-Compare the latest year with the prior year.
+Compare periods when possible.
 
-Pay particular attention to the company's consolidated
-income statement, balance sheet, and cash flow statement.
-
-Highlight the most important year-over-year changes.
+If a metric is not available, explicitly say it was
+not found rather than estimating it.
 """
 
 
-    # Revenue Analysis
-    with row1_col2:
+    # ------------------------------------------------------
+    # REVENUE
+    # ------------------------------------------------------
+
+    with row1_col3:
 
         if st.button(
             "💰 Revenue Analysis",
             use_container_width=True,
         ):
 
-            analysis_name = "Revenue Analysis"
+            analysis_name = (
+                "Revenue Analysis"
+            )
 
             analysis_question = """
-Analyze revenue performance.
+Analyze revenue or sales performance.
 
-Include:
+When available include:
 
-- Latest-year revenue
-- Prior-year revenue
+- Current-period revenue
+- Prior-period revenue
 - Dollar change
 - Percentage change
-- Product or service revenue trends
+- Product or service revenue
 - Segment trends
 - Geographic trends
-- Important revenue drivers
+- Customer trends
+- Volume and pricing effects
+- Major revenue drivers
+- Management explanations
 
-Finish with a short finance interpretation.
+Finish with a concise business interpretation.
+
+Do not invent revenue figures if this document does
+not contain them.
 """
 
 
-    # Profitability Analysis
-    with row1_col3:
+    # ------------------------------------------------------
+    # PROFITABILITY
+    # ------------------------------------------------------
+
+    with row2_col1:
 
         if st.button(
             "📈 Profitability Analysis",
             use_container_width=True,
         ):
 
-            analysis_name = "Profitability Analysis"
+            analysis_name = (
+                "Profitability Analysis"
+            )
 
             analysis_question = """
-Analyze profitability.
+Analyze profitability using information available
+in the document.
 
-Include:
+When available include:
 
+- Gross profit
 - Gross margin
 - Operating income
 - Operating margin
+- EBITDA
 - Net income
 - Net margin
 - Earnings per share
+- Expense trends
+- Major profitability drivers
 
-Compare the latest year with the prior year.
+Compare available periods.
 
-Explain the major reasons profitability changed.
+Explain why profitability improved or deteriorated
+when the document provides enough evidence.
 """
 
 
-    # Cash Flow Analysis
-    with row2_col1:
+    # ------------------------------------------------------
+    # CASH FLOW
+    # ------------------------------------------------------
+
+    with row2_col2:
 
         if st.button(
             "💵 Cash Flow Analysis",
             use_container_width=True,
         ):
 
-            analysis_name = "Cash Flow Analysis"
+            analysis_name = (
+                "Cash Flow Analysis"
+            )
 
             analysis_question = """
-Analyze cash flow performance.
+Analyze cash flow and liquidity.
 
-Include:
+When available include:
 
 - Operating cash flow
 - Capital expenditures
 - Investing activities
 - Financing activities
+- Debt activity
 - Share repurchases
 - Dividends
 - Cash balance
-- Approximate free cash flow when possible
+- Free cash flow
+- Liquidity position
 
-Explain what the cash flow profile suggests.
+Explain what the cash flow information suggests
+about the company.
+
+If cash flow information is not contained in this
+document, clearly say so.
 """
 
 
-    # Risk Analysis
-    with row2_col2:
+    # ------------------------------------------------------
+    # RISK
+    # ------------------------------------------------------
+
+    with row2_col3:
 
         if st.button(
             "⚠️ Risk Analysis",
             use_container_width=True,
         ):
 
-            analysis_name = "Risk Analysis"
+            analysis_name = (
+                "Risk Analysis"
+            )
 
             analysis_question = """
-Analyze the company's major risks.
+Identify and analyze the most important risks
+described or implied by this document.
 
-Consider:
+Consider when relevant:
 
 - Business risk
 - Financial risk
+- Liquidity risk
+- Competitive risk
 - Market risk
 - Regulatory risk
 - Supply-chain risk
+- Customer concentration
 - Geographic risk
 - Technology risk
-- Competitive risk
+- Cybersecurity risk
+- Operational risk
+- Macroeconomic risk
 
-Rank or emphasize the most important risks
-based on the report.
+Rank the most material risks when enough evidence exists.
+
+Separate facts stated in the document from your analysis.
 """
 
 
-    # --------------------------------------------------
-    # Custom questions
-    # --------------------------------------------------
+    # ======================================================
+    # DOCUMENT SUMMARY
+    # ======================================================
 
     st.divider()
 
-    st.markdown("## 💬 Ask Your Own Financial Question")
+    if st.button(
+        "📄 Summarize Entire Document",
+        use_container_width=True,
+    ):
+
+        analysis_name = (
+            "Document Summary"
+        )
+
+        analysis_question = """
+Provide an executive summary of this document.
+
+Explain:
+
+- What this document is
+- Its main purpose
+- Most important information
+- Important financial figures
+- Major business developments
+- Management commentary
+- Opportunities
+- Risks
+- Important trends
+- Key conclusions
+
+Prioritize information that would be useful to a
+financial analyst or business decision-maker.
+
+Do not invent anything missing from the document.
+"""
+
+
+    # ======================================================
+    # CUSTOM QUESTION
+    # ======================================================
+
+    st.divider()
+
+    st.markdown(
+        "## 💬 Ask Your Own Question"
+    )
 
     custom_question = st.text_input(
         "Question",
         placeholder=(
-            "Example: How did operating income change "
-            "compared with last year?"
+            "Example: What are the biggest changes "
+            "reported in this document?"
         ),
         label_visibility="collapsed",
     )
@@ -609,8 +1185,13 @@ based on the report.
 
         if custom_question.strip():
 
-            analysis_name = "Custom Financial Analysis"
-            analysis_question = custom_question
+            analysis_name = (
+                "Custom Document Analysis"
+            )
+
+            analysis_question = (
+                custom_question
+            )
 
         else:
 
@@ -619,27 +1200,28 @@ based on the report.
             )
 
 
-    # --------------------------------------------------
-    # Run analysis
-    # --------------------------------------------------
+    # ======================================================
+    # RUN ANALYSIS
+    # ======================================================
 
     if analysis_question:
 
         try:
 
             with st.spinner(
-                "Retrieving relevant sections and analyzing..."
+                "Retrieving relevant information and analyzing..."
             ):
 
                 (
                     answer,
-                    relevant_pages,
-                    selected_page_numbers,
-                ) = analyze_financial_report(
+                    relevant_sections,
+                    source_names,
+                ) = analyze_company_document(
                     analysis_question,
                     analysis_name,
-                    pages,
-                    page_embeddings,
+                    document_profile,
+                    sections,
+                    section_embeddings,
                 )
 
             st.divider()
@@ -657,20 +1239,22 @@ based on the report.
                 clean_answer
             )
 
+
+            # ==================================================
+            # RETRIEVED SOURCES
+            # ==================================================
+
             st.caption(
-                "Source pages retrieved: "
+                "Sources retrieved: "
                 + ", ".join(
-                    map(
-                        str,
-                        selected_page_numbers,
-                    )
+                    source_names
                 )
             )
 
 
-            # --------------------------------------------------
-            # Semantic retrieval chart
-            # --------------------------------------------------
+            # ==================================================
+            # SEMANTIC RETRIEVAL CHART
+            # ==================================================
 
             st.markdown(
                 "### 🔎 Semantic Retrieval Confidence"
@@ -678,27 +1262,27 @@ based on the report.
 
             retrieval_data = pd.DataFrame(
                 {
-                    "PDF Page": [
-                        str(result["page_number"])
-                        for result in relevant_pages
+                    "Source": [
+                        result["source"]
+                        for result in relevant_sections
                     ],
                     "Similarity Score": [
                         result["similarity"]
-                        for result in relevant_pages
+                        for result in relevant_sections
                     ],
                 }
             )
 
             st.bar_chart(
                 retrieval_data.set_index(
-                    "PDF Page"
+                    "Source"
                 )
             )
 
 
-            # --------------------------------------------------
-            # Download analysis
-            # --------------------------------------------------
+            # ==================================================
+            # DOWNLOAD ANALYSIS
+            # ==================================================
 
             st.download_button(
                 label="⬇️ Download Analysis",
@@ -712,90 +1296,105 @@ based on the report.
             )
 
 
-            # --------------------------------------------------
-            # Retrieval details
-            # --------------------------------------------------
+            # ==================================================
+            # RETRIEVAL DETAILS
+            # ==================================================
 
             with st.expander(
                 "View retrieval details"
             ):
 
-                for result in relevant_pages:
+                for result in relevant_sections:
 
                     st.write(
-                        f"PDF Page {result['page_number']} "
+                        f"{result['source']} "
                         f"— Similarity Score: "
                         f"{result['similarity']:.3f}"
                     )
 
-
         except Exception as error:
 
             st.error(
-                "Something went wrong while analyzing the report."
+                "Something went wrong while analyzing the document."
             )
 
-            st.write(error)
+            st.write(
+                error
+            )
 
 
-    # --------------------------------------------------
-    # PDF preview
-    # --------------------------------------------------
+    # ======================================================
+    # EXTRACTED CONTENT PREVIEW
+    # ======================================================
 
     st.divider()
 
     with st.expander(
-        "📄 View Extracted Report Text"
+        "📄 View Extracted Document Content"
     ):
 
         preview_text = ""
 
-        for page in pages[:5]:
+        for section in sections[:5]:
 
             preview_text += (
-                f"\n\n--- PDF PAGE "
-                f"{page['page_number']} ---\n\n"
-                f"{page['text']}"
+                f"\n\n--- {section['source']} ---\n\n"
+                f"{section['text']}"
             )
 
         st.text_area(
-            "Extracted report text",
+            "Extracted document content",
             preview_text,
             height=400,
         )
 
 
-# --------------------------------------------------
-# Project Highlights
-# --------------------------------------------------
+# ==========================================================
+# PROJECT HIGHLIGHTS
+# ==========================================================
 
 st.divider()
 
-st.markdown("### 🚀 Project Highlights")
+st.markdown(
+    "### 🚀 Project Highlights"
+)
 
-highlight1, highlight2, highlight3 = st.columns(3)
+highlight1, highlight2, highlight3, highlight4 = st.columns(
+    4
+)
 
 with highlight1:
+
     st.metric(
         "Architecture",
-        "RAG"
+        "RAG",
     )
 
 with highlight2:
+
     st.metric(
         "Retrieval",
-        "Semantic Search"
+        "Semantic Search",
     )
 
 with highlight3:
+
+    st.metric(
+        "Documents",
+        "Multi-format",
+    )
+
+with highlight4:
+
     st.metric(
         "Deployment",
-        "Streamlit Cloud"
+        "Streamlit Cloud",
     )
 
 st.caption(
-    "Built with Python, OpenAI, vector embeddings, semantic search, "
-    "financial analysis, GitHub, and Streamlit."
+    "Built with Python, OpenAI, vector embeddings, "
+    "semantic search, document intelligence, RAG, "
+    "GitHub, and Streamlit."
 )
 
 st.caption(
