@@ -1,341 +1,579 @@
-# 📊 AI Financial Report Analyzer
+# 📊 AI Company Document Analyzer
 
-An AI-powered financial research application that analyzes company **10-K filings and annual reports** using **Retrieval-Augmented Generation (RAG), semantic search, vector embeddings, and large language models**.
+An AI-powered document intelligence application that analyzes company documents using **OpenAI, Retrieval-Augmented Generation (RAG), vector embeddings, and semantic search**.
 
-Users can upload a financial report and instantly perform revenue, profitability, cash flow, financial position, and risk analysis — with supporting PDF page references.
+The application can process multiple business document formats, automatically identify the type of document uploaded, retrieve the most relevant information, and generate context-aware financial and business analysis.
 
-## 🌐 Live Demo
-
-👉 **[Try the AI Financial Report Analyzer](https://ai-financial-report-analyzer-scyfxsnfu2sgj9lgmfb4ts.streamlit.app/)**
+🔗 **Live Application:**  
+https://ai-financial-report-analyzer-scyfxsnfu2sgj9lgmfb4ts.streamlit.app/
 
 ---
 
-## 🚀 Key Features
+## 🚀 Project Overview
+
+Companies generate large amounts of information across financial reports, spreadsheets, presentations, regulatory filings, earnings materials, operational reports, and other business documents.
+
+Manually reviewing these documents can be time-consuming and makes it difficult to quickly locate the information that matters.
+
+The **AI Company Document Analyzer** was built to make that process faster.
+
+Users can upload a company document and the application will:
+
+1. Extract the document's content
+2. Automatically identify the document type
+3. Detect company and reporting-period information when available
+4. Convert document sections into vector embeddings
+5. Use semantic search to retrieve the most relevant information
+6. Send retrieved context to an AI model
+7. Generate structured financial and business analysis
+8. Show the document sections used during retrieval
+
+The system is designed around **Retrieval-Augmented Generation (RAG)** so that analysis is grounded in the uploaded document rather than relying only on the AI model's general knowledge.
+
+---
+
+## 📁 Supported File Types
+
+The application currently supports:
+
+| Format | Supported |
+|---|---|
+| PDF | ✅ |
+| Excel (.xlsx) | ✅ |
+| CSV | ✅ |
+| Word (.docx) | ✅ |
+| PowerPoint (.pptx) | ✅ |
+| TXT | ✅ |
+
+This allows the application to analyze many common company documents, including:
+
+- 10-K filings
+- 10-Q filings
+- Annual reports
+- Earnings releases
+- Investor presentations
+- Financial statements
+- Excel financial models
+- Budgets
+- Forecasts
+- Sales reports
+- Accounts receivable reports
+- Operational reports
+- Strategy documents
+- Company presentations
+- Regulatory filings
+- Other text-based business documents
+
+---
+
+## 🧠 Automatic Document Intelligence
+
+After a document is uploaded, the application automatically attempts to identify:
+
+- **Company Name**
+- **Document Type**
+- **Reporting Period**
+- **Fiscal Year**
+- **Primary Document Focus**
+- **Identification Confidence**
+
+For example, the system can distinguish an investor presentation from a traditional annual report and adjust its analysis accordingly.
+
+Possible document classifications include:
+
+- 10-K
+- 10-Q
+- Annual Report
+- Earnings Release
+- Investor Presentation
+- Financial Statements
+- Income Statement
+- Balance Sheet
+- Cash Flow Statement
+- Excel Financial Model
+- Budget
+- Forecast
+- Accounts Receivable Report
+- Sales Report
+- Operational Report
+- Strategy Document
+- Regulatory Filing
+- Company Presentation
+- Other Company Document
+
+---
+
+## ⚡ AI Analysis Tools
+
+The application includes several built-in analysis workflows.
+
+### 🏢 Company Overview
+
+Extracts and summarizes information such as:
+
+- Main business activities
+- Products and services
+- Business segments
+- Geographic presence
+- Important markets
+- Strategic priorities
+- Recent developments
+- Opportunities
+- Challenges
+
+---
 
 ### 📌 Financial Snapshot
 
-Automatically extracts and analyzes key financial metrics, including:
+Attempts to identify important financial metrics including:
 
-- Revenue / Net Sales
-- Operating Income
-- Net Income
-- Earnings Per Share
-- Operating Cash Flow
-- Cash and Cash Equivalents
-- Total Assets
-- Total Liabilities
-- Year-over-Year Changes
+- Revenue
+- Gross profit
+- Operating income
+- Net income
+- Earnings per share
+- Operating cash flow
+- Cash and cash equivalents
+- Total assets
+- Total liabilities
+- Debt
+- Equity
+- Relevant financial ratios
+
+When multiple periods are available, the system can compare financial performance across periods.
+
+---
 
 ### 💰 Revenue Analysis
 
 Analyzes:
 
-- Current-year revenue
-- Prior-year revenue
-- Dollar and percentage changes
-- Product and service trends
-- Geographic trends
+- Current-period revenue
+- Prior-period revenue
+- Dollar changes
+- Percentage changes
+- Segment performance
+- Geographic performance
+- Product or service trends
+- Volume effects
+- Pricing effects
 - Major revenue drivers
-- Management explanations
+
+---
 
 ### 📈 Profitability Analysis
 
-Evaluates:
+Examines profitability metrics such as:
 
-- Gross Margin
-- Operating Income
-- Operating Margin
-- Net Income
-- Net Margin
-- Earnings Per Share
-- Year-over-Year Profitability Trends
+- Gross profit
+- Gross margin
+- Operating income
+- Operating margin
+- EBITDA when available
+- Net income
+- Net margin
+- Earnings per share
+- Expense trends
+- Profitability drivers
+
+---
 
 ### 💵 Cash Flow Analysis
 
-Examines:
+Analyzes available information related to:
 
-- Operating Cash Flow
-- Capital Expenditures
-- Investing Activities
-- Financing Activities
-- Share Repurchases
+- Operating cash flow
+- Capital expenditures
+- Investing activities
+- Financing activities
+- Debt activity
 - Dividends
-- Cash Position
-- Free Cash Flow indicators
-- Working Capital movements
+- Share repurchases
+- Cash balances
+- Liquidity
+- Free cash flow when enough information is available
+
+---
 
 ### ⚠️ Risk Analysis
 
-Identifies and summarizes major company risks, including:
+Identifies and analyzes risks such as:
 
-- Business Risk
-- Financial Risk
-- Market Risk
-- Regulatory Risk
-- Supply Chain Risk
-- Geographic Risk
-- Technology Risk
-- Competitive Risk
-
-### 💬 Custom Financial Questions
-
-Users can ask their own questions about the uploaded report.
-
-Example:
-
-> What were Apple's total net sales in 2025, and how did they change compared with 2024?
-
-### 🔎 Source Page Retrieval
-
-The application identifies and displays the PDF pages most relevant to each analysis.
-
-### 📊 Semantic Retrieval Visualization
-
-A chart displays the similarity scores of the pages retrieved by the semantic search system.
-
-### ⬇️ Download Analysis
-
-Users can download generated financial analysis results as a text file.
+- Business risk
+- Financial risk
+- Liquidity risk
+- Competitive risk
+- Market risk
+- Regulatory risk
+- Supply-chain risk
+- Customer concentration
+- Geographic risk
+- Technology risk
+- Cybersecurity risk
+- Operational risk
+- Macroeconomic risk
 
 ---
 
-## 🧠 How It Works
+### 📄 Document Summary
 
-The application uses a **Retrieval-Augmented Generation (RAG)** architecture.
+Generates an executive-level summary covering the most important information contained in the uploaded document.
+
+Depending on the document, this may include:
+
+- Document purpose
+- Important financial figures
+- Business developments
+- Management commentary
+- Opportunities
+- Risks
+- Trends
+- Key conclusions
+
+---
+
+### 💬 Custom Questions
+
+Users are not limited to predefined analyses.
+
+The application includes a custom question interface that allows users to ask questions directly about the uploaded document.
+
+Example questions:
+
+> What were the major drivers of revenue growth?
+
+> What are the company's largest risks?
+
+> How did profitability change compared with the previous period?
+
+> What does management say about future growth?
+
+> Which geographic region generated the most sales?
+
+The semantic retrieval system searches the document for sections most relevant to the question before generating the response.
+
+---
+
+## 🔎 Retrieval-Augmented Generation (RAG)
+
+Instead of sending an entire document directly to the AI model for every question, the application uses a retrieval pipeline.
+
+### RAG Workflow
 
 ```text
-10-K / Annual Report PDF
-          ↓
-PDF Text Extraction
-          ↓
-Page-by-Page Processing
-          ↓
+Company Document
+       ↓
+Document Extraction
+       ↓
+Document Identification
+       ↓
+Text Sections / PDF Pages
+       ↓
 Vector Embeddings
-          ↓
-Semantic Similarity Search
-          ↓
-Most Relevant Pages Retrieved
-          ↓
-Large Language Model
-          ↓
-Financial Analysis
-          ↓
-Answer + Supporting PDF Pages
+       ↓
+Semantic Search
+       ↓
+Relevant Sections Retrieved
+       ↓
+AI Analysis
+       ↓
+Grounded Response
 ```
 
-Instead of sending an entire 10-K to the AI for every request, the application first identifies the sections most relevant to the user's question.
-
-This helps improve:
-
-- Response relevance
-- Token efficiency
-- Processing speed
-- API cost efficiency
-- Source traceability
+This architecture improves the relevance of the context supplied to the AI model and makes it possible to work with larger company documents more efficiently.
 
 ---
 
-## 🔍 Semantic Search
+## 🧮 Semantic Search
 
-Each page of the uploaded financial report is converted into a numerical vector representation using:
+Document sections are converted into vector embeddings using:
 
 ```text
 text-embedding-3-small
 ```
 
-The user's question is also converted into an embedding.
+When a user selects an analysis or asks a question:
 
-The application then uses **cosine similarity** to compare the question vector with the financial-report page vectors.
+1. The question is converted into an embedding
+2. The question embedding is compared with document-section embeddings
+3. Cosine similarity is calculated
+4. The most relevant sections are selected
+5. Those sections become context for the AI analysis
 
-The highest-ranking pages are retrieved and supplied to the language model as context.
-
-This allows the application to retrieve information based on **meaning**, rather than relying only on exact keyword matches.
-
----
-
-## 🏦 Finance-Focused RAG
-
-The application is specifically designed for financial-report analysis.
-
-Its prompts instruct the AI to:
-
-- Use only information retrieved from the uploaded report
-- Avoid inventing unsupported financial figures
-- Distinguish millions, billions, percentages, and per-share values
-- Compare financial periods when data is available
-- Calculate year-over-year changes
-- Identify important financial drivers
-- Provide supporting PDF page references
-- Explain financial results in clear language
-- Avoid providing investment advice
+This allows the application to retrieve information based on **meaning**, rather than relying only on exact keyword matching.
 
 ---
 
-## 🛠️ Tech Stack
+## 📊 Retrieval Transparency
 
-- **Python**
-- **Streamlit**
-- **OpenAI API**
-- **OpenAI Embeddings**
-- **Retrieval-Augmented Generation (RAG)**
-- **Semantic Search**
-- **Vector Embeddings**
-- **Cosine Similarity**
-- **NumPy**
-- **Pandas**
-- **PyPDF**
-- **Python-dotenv**
-- **Git**
-- **GitHub**
-- **Streamlit Community Cloud**
+The application displays information about the semantic retrieval process.
+
+Users can view:
+
+- Retrieved document sections
+- Similarity scores
+- Semantic retrieval confidence visualization
+
+For PDFs, retrieved information can retain page-level citation labels.
+
+For other supported formats, extracted content is divided into sections that can be referenced during analysis.
+
+This provides greater transparency into which parts of the document were used to generate an answer.
 
 ---
 
-## 📄 Example Use Cases
+## 🗂️ Multi-Format Document Processing
 
-Upload a company's annual report or Form 10-K and ask questions such as:
+Different document formats require different extraction methods.
 
-- How much did revenue grow this year?
-- What caused the change in profitability?
-- How did operating income change?
-- What is the company's operating margin?
-- How has operating cash flow changed?
-- What are total assets and liabilities?
-- What products contributed most to revenue growth?
-- How has EPS changed year over year?
-- What are the company's largest business risks?
-- What regulatory risks does management discuss?
-- What does the company's cash flow profile indicate?
+The application uses a dedicated document-processing layer to convert supported files into text that can be analyzed by the RAG pipeline.
+
+### PDF
+
+Extracts readable text from individual PDF pages.
+
+### Excel
+
+Reads worksheets and converts tabular information into structured text.
+
+### CSV
+
+Reads structured tabular datasets using Pandas.
+
+### Word
+
+Extracts paragraphs and table content from `.docx` documents.
+
+### PowerPoint
+
+Extracts text from presentation slides.
+
+### TXT
+
+Reads plain-text company documents.
+
+After extraction, the content enters the same semantic-search and AI-analysis pipeline.
 
 ---
 
-## 📊 Example Analysis
-
-The application was tested using Apple's Form 10-K.
-
-It successfully performed analyses including:
-
-- Financial Snapshot
-- Revenue Analysis
-- Profitability Analysis
-- Cash Flow Analysis
-- Risk Analysis
-- Custom Financial Questions
-
-The system retrieves relevant report pages before generating each response and displays those pages as supporting sources.
-
----
-
-## 🔐 API Key Security
-
-The OpenAI API key is **not stored in the source code**.
-
-For local development, it is stored inside a `.env` file:
+## 🏗️ Application Architecture
 
 ```text
-OPENAI_API_KEY=your_api_key_here
+User
+  ↓
+Streamlit Interface
+  ↓
+File Upload
+  ↓
+Document Reader
+  ↓
+Content Extraction
+  ↓
+AI Document Classification
+  ↓
+Document Sections
+  ↓
+OpenAI Embeddings
+  ↓
+Vector Similarity Search
+  ↓
+Relevant Context Retrieval
+  ↓
+OpenAI Analysis
+  ↓
+Structured Business / Financial Response
+  ↓
+Streamlit Dashboard
 ```
-
-The `.env` file is excluded from Git using `.gitignore`.
-
-For the deployed application, the API key is stored securely using **Streamlit Community Cloud Secrets**.
-
-This prevents credentials from being exposed in the public GitHub repository.
 
 ---
 
-## ⚙️ Run Locally
+## 🛠️ Technology Stack
 
-### 1. Clone the repository
+### Programming
 
-```bash
-git clone https://github.com/G-shreyesh/AI-Financial-Report-Analyzer.git
-```
+- Python
 
-### 2. Open the project folder
+### Application Framework
 
-```bash
-cd AI-Financial-Report-Analyzer
-```
+- Streamlit
 
-### 3. Create a virtual environment
+### AI
 
-```bash
-python -m venv .venv
-```
+- OpenAI API
 
-### 4. Activate the virtual environment
+### AI Architecture
 
-Windows:
+- Retrieval-Augmented Generation (RAG)
+- Vector Embeddings
+- Semantic Search
+- Prompt Engineering
 
-```bash
-.venv\Scripts\activate
-```
+### Data Processing
 
-### 5. Install dependencies
+- Pandas
+- NumPy
 
-```bash
-pip install -r requirements.txt
-```
+### Document Processing
 
-### 6. Create a `.env` file
+- PyPDF
+- python-docx
+- openpyxl
+- python-pptx
 
-Inside the project folder, create:
+### Development & Deployment
 
-```text
-.env
-```
-
-Add:
-
-```text
-OPENAI_API_KEY=your_api_key_here
-```
-
-### 7. Run the application
-
-```bash
-streamlit run app.py
-```
-
-The application will open in your browser.
+- Git
+- GitHub
+- Streamlit Community Cloud
 
 ---
 
-## 📁 Project Structure
+## 📂 Project Structure
 
 ```text
 AI-Financial-Report-Analyzer/
 │
 ├── app.py
-├── README.md
+├── document_reader.py
 ├── requirements.txt
+├── README.md
 ├── .gitignore
 └── .env
 ```
 
-> `.env` exists only in the local development environment and is intentionally excluded from GitHub.
+### `app.py`
+
+Contains the primary Streamlit application, including:
+
+- User interface
+- File upload
+- Document processing workflow
+- Automatic document identification
+- Embedding generation
+- Semantic retrieval
+- AI analysis
+- Retrieval visualization
+
+### `document_reader.py`
+
+Handles extraction from multiple document formats including:
+
+- PDF-related supporting workflow
+- Excel
+- CSV
+- Word
+- PowerPoint
+- TXT
+
+### `requirements.txt`
+
+Contains the Python dependencies required to run and deploy the application.
 
 ---
 
-## 🎯 Project Objective
+## 🔐 Environment Variables
 
-The goal of this project is to combine **Artificial Intelligence with Financial Analysis** to create a practical research tool for interpreting complex financial disclosures.
+The application requires an OpenAI API key.
 
-The project demonstrates hands-on experience with:
+Create a `.env` file locally:
 
-- Generative AI
-- Financial Statement Analysis
-- Retrieval-Augmented Generation
-- Vector Embeddings
-- Semantic Search
-- Prompt Engineering
-- API Integration
-- Financial Data Interpretation
-- Python Application Development
-- Cloud Deployment
-- Git Version Control
-- GitHub
+```text
+OPENAI_API_KEY=your_api_key_here
+```
+
+The `.env` file should **never be committed to GitHub**.
+
+For cloud deployment, the API key should be stored securely using the deployment platform's secrets-management system.
+
+---
+
+## 💻 Running the Project Locally
+
+Clone the repository:
+
+```bash
+git clone <your-repository-url>
+```
+
+Navigate to the project directory:
+
+```bash
+cd AI-Financial-Report-Analyzer
+```
+
+Create a virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+### Windows
+
+Activate the environment:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Run the application:
+
+```bash
+python -m streamlit run app.py
+```
+
+The application will normally become available at:
+
+```text
+http://localhost:8501
+```
+
+---
+
+## 🧪 Testing
+
+The application has been tested with multiple categories of company documents and file formats.
+
+Example test scenarios include:
+
+- Financial filing PDF
+- Annual report PDF
+- Earnings / investor presentation PDF
+- Excel financial dataset
+- CSV dataset
+- Word business document
+- PowerPoint presentation
+- Plain-text document
+
+Testing focuses on:
+
+- Successful file extraction
+- Document-type identification
+- Semantic retrieval
+- Financial analysis
+- Custom question answering
+- Multi-format compatibility
+
+---
+
+## ⚠️ Current Limitations
+
+The project is designed as a portfolio, educational, and research application and has several current limitations.
+
+- Image-only or scanned PDFs may require OCR before their content can be analyzed.
+- AI-generated document classification may occasionally be incorrect.
+- Financial analysis depends on the information actually contained in the uploaded document.
+- Complex spreadsheet formatting, formulas, charts, images, and macros may not be fully represented during text extraction.
+- Visual information contained only in images or charts may not be captured.
+- Very large documents may require additional optimization or batching.
+- Non-PDF citations currently use extracted section references rather than native spreadsheet-cell, Word-paragraph, or PowerPoint-slide citations in all cases.
+- AI output should be independently verified before being used for financial or business decisions.
 
 ---
 
@@ -343,27 +581,46 @@ The project demonstrates hands-on experience with:
 
 Potential future enhancements include:
 
-- Multi-company financial comparison
-- Automatic financial ratio calculations
-- Historical trend charts
-- Revenue and profitability visualization
-- Multi-year comparison
-- Improved document chunking
-- Persistent vector databases
+- Multi-document analysis
+- Company-level knowledge bases
+- Comparison of multiple companies
+- Quarter-over-quarter comparison
+- Automated financial ratio calculation
+- Financial statement normalization
+- Native Excel sheet/cell citations
+- Native PowerPoint slide citations
+- Improved document metadata extraction
+- OCR for scanned documents
+- Chart and image understanding
 - Conversation history
-- Company and ticker recognition
-- Automated KPI extraction
-- Exportable PDF financial reports
-- SEC filing integration
-- Financial news integration
+- Persistent vector databases
+- Document libraries
+- Advanced financial dashboards
+- Exportable PDF analysis reports
 
 ---
 
-## ⚠️ Disclaimer
+## 🎯 Project Goal
 
-This project is designed for educational, research, and demonstration purposes.
+The goal of this project is to demonstrate how modern AI systems can combine:
 
-AI-generated analysis may contain errors and should not be considered financial or investment advice.
+**Financial analysis + document intelligence + semantic retrieval + generative AI**
+
+to transform unstructured and semi-structured company documents into useful business insights.
+
+The project demonstrates practical experience with:
+
+- Financial analysis
+- Python development
+- OpenAI APIs
+- Retrieval-Augmented Generation
+- Vector embeddings
+- Semantic search
+- Multi-format document processing
+- AI prompt design
+- Streamlit application development
+- Git/GitHub workflows
+- Cloud deployment
 
 ---
 
@@ -372,4 +629,14 @@ AI-generated analysis may contain errors and should not be considered financial 
 **Shreyesh Gaddamwar**
 
 Master's in Quantitative Finance  
-AI × Finance Project Portfolio
+University of Massachusetts Dartmouth
+
+---
+
+## ⚖️ Disclaimer
+
+This project is intended for **educational, research, and portfolio purposes only**.
+
+AI-generated outputs may contain errors or omissions and should be independently verified.
+
+Nothing produced by this application should be considered financial, investment, legal, accounting, or professional advice.
